@@ -1,0 +1,24 @@
+# --- Core (P0 — required to run AbilityOS) ---------------------------------
+Django==5.2.17
+djangorestframework==3.18.1
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+python-dotenv==1.2.3
+dj-database-url==3.1.2
+pydantic==2.13.5
+
+# PostgreSQL driver — required only when DATABASE_URL points at Postgres.
+# The project runs on SQLite out of the box if this isn't installed and
+# DATABASE_URL is left unset (see backend/.env.example).
+psycopg2-binary==2.9.10
+
+# --- Optional (P1) — install only if you want these features -----------------
+# AI Decision Engine provider SDKs. Neither is required: with no key
+# configured, AbilityOS uses the deterministic Adaptation Engine fallback.
+# openai==1.54.0
+# anthropic==0.39.0
+
+# Computer-vision / OCR environment analysis (VISION_ENABLED=true). The
+# JSON-fixture environment path (the hackathon default) does not need these.
+# opencv-python-headless==4.10.0.84
+# pytesseract==0.3.13

@@ -1,0 +1,25 @@
+{
+  "environment_id": "kiosk_standard",
+  "name": "City Transit ticket kiosk — standard interface",
+  "environment_type": "ticket_kiosk",
+  "screen": {
+    "width": 1280,
+    "height": 800
+  },
+  "controls": [
+    { "id": "dest_central_station", "type": "button", "label": "Central Station", "width": 150, "height": 40, "primary": false },
+    { "id": "dest_airport", "type": "button", "label": "Airport", "width": 150, "height": 40, "primary": false },
+    { "id": "dest_hospital", "type": "button", "label": "Hospital", "width": 150, "height": 40, "primary": false },
+    { "id": "dest_university", "type": "button", "label": "University", "width": 150, "height": 40, "primary": false },
+    { "id": "ticket_single", "type": "button", "label": "Single", "width": 120, "height": 36, "primary": false },
+    { "id": "ticket_return", "type": "button", "label": "Return", "width": 120, "height": 36, "primary": false },
+    { "id": "quantity_minus", "type": "button", "label": "-", "width": 32, "height": 32, "primary": false },
+    { "id": "quantity_plus", "type": "button", "label": "+", "width": 32, "height": 32, "primary": false },
+    { "id": "buy_ticket", "type": "button", "label": "BUY TICKET", "width": 120, "height": 40, "primary": true }
+  ],
+  "contrast": 0.52,
+  "visible_choice_count": 8,
+  "audio_alert": true,
+  "visual_alert_mirror": false,
+  "noise_level": "moderate"
+}

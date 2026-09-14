@@ -1,0 +1,277 @@
+/* AbilityOS design tokens — WCAG AA contrast throughout (Part 23: the
+   accessibility project must itself be accessible). */
+:root {
+  --color-bg: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #eef2f6;
+  --color-border: #cbd5e1;
+  --color-text: #14213d;
+  --color-text-muted: #45526b;
+  --color-primary: #14335c;
+  --color-primary-strong: #0b2242;
+  --color-accent: #0f7a6d;
+  --color-accent-strong: #0b5c52;
+  --color-danger: #a3241d;
+  --color-danger-bg: #fdecea;
+  --color-warning: #8a5a00;
+  --color-warning-bg: #fff4dc;
+  --color-success: #1c6e3a;
+  --color-success-bg: #e8f5ec;
+  --color-focus: #1d63d8;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 var(--space-3) 0;
+  color: var(--color-primary-strong);
+}
+
+p {
+  margin: 0 0 var(--space-3) 0;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Visible, high-contrast focus ring everywhere — keyboard navigation
+   (Part 23) must never be silently swallowed by a component's own styles. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--color-primary);
+  color: #fff;
+  padding: var(--space-2) var(--space-4);
+  z-index: 1000;
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pill--low {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.pill--medium {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.pill--high {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.pill--neutral {
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+}
+
+.btn {
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  padding: var(--space-3) var(--space-5);
+  font-size: 1rem;
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-strong);
+}
+
+.btn--accent {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.btn--accent:hover {
+  background: var(--color-accent-strong);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn--ghost:hover {
+  background: var(--color-surface-alt);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.metrics-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-4);
+}
+
+.metrics-panel__table th,
+.metrics-panel__table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.metrics-panel__improved {
+  color: var(--color-success);
+  font-weight: 700;
+}
+
+.app-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+}
+
+.app-header__brand {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header__brand strong {
+  font-size: 1.4rem;
+  color: var(--color-primary-strong);
+}
+
+.app-header__tagline {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.app-header__nav {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.demo-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.demo-page__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .demo-page__grid {
+    grid-template-columns: 1fr;
+  }
+}
