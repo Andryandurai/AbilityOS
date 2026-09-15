@@ -1,10 +1,10 @@
-export default function Header({ view, onNavigate, onReset }) {
+export default function Header({ view, onNavigate, onReset, onHome }) {
   return (
     <header className="app-header">
-      <div className="app-header__brand">
+      <button type="button" className="app-header__brand app-header__brand--button" onClick={onHome}>
         <strong>AbilityOS</strong>
         <span className="app-header__tagline">An Operating System for Human Abilities</span>
-      </div>
+      </button>
       <nav className="app-header__nav" aria-label="Primary">
         <button
           className={`btn ${view === "demo" ? "btn--primary" : "btn--ghost"}`}

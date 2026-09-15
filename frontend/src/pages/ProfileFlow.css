@@ -1,0 +1,187 @@
+.profile-flow {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-4) 0;
+}
+
+.profile-flow__intro {
+  text-align: center;
+  margin-bottom: var(--space-5);
+}
+
+.profile-flow__narrow {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.profile-flow__wide {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.profile-flow__subtitle {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+
+.profile-flow__cta {
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+.profile-flow__note {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin-top: var(--space-3);
+  margin-bottom: 0;
+}
+
+.profile-flow__actions {
+  margin-top: var(--space-5);
+  justify-content: flex-end;
+}
+
+/* --- Select User -------------------------------------------------------- */
+.user-select__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.user-select__card {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-select__needs-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.user-select__needs {
+  margin: 0 0 var(--space-4) 0;
+  padding-left: 1.2em;
+  flex: 1;
+}
+
+/* --- Consent -------------------------------------------------------------- */
+.consent-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+  padding: var(--space-3);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.consent-checkbox input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* --- Profile editor -------------------------------------------------------- */
+.profile-editor__group {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-4) 0;
+  margin: 0;
+}
+
+.profile-editor__group:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.profile-editor__group legend {
+  padding: 0;
+  margin-bottom: var(--space-3);
+  width: 100%;
+}
+
+.profile-editor__heading {
+  display: block;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-accent-strong);
+}
+
+.profile-editor__question {
+  display: block;
+  font-size: 1.05rem;
+  color: var(--color-text);
+  margin-top: 2px;
+}
+
+.profile-editor__options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.profile-editor__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.profile-editor__option:hover {
+  background: var(--color-surface-alt);
+}
+
+.profile-editor__option input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* --- Summary -------------------------------------------------------------- */
+.profile-summary__list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-5) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: 1.1rem;
+}
+
+.profile-summary__dev-toggle {
+  background: none;
+  border: none;
+  color: var(--color-accent-strong);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: var(--space-2) 0;
+  margin-top: var(--space-3);
+}
+
+.profile-summary__dev-panel {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+}
+
+.profile-summary__dev-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.9rem;
+}

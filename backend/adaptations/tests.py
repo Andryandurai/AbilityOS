@@ -77,7 +77,7 @@ class AdaptationScoringTests(TestCase):
     def test_low_cost_low_risk_adaptation_outranks_expensive_high_risk_one(self):
         barrier = make_barrier(severity=0.8)
 
-        ranked = rank_candidates_for_barrier(barrier, "purchase_ticket", "visual+haptic")
+        ranked = rank_candidates_for_barrier(barrier, "purchase_ticket", "mixed")
 
         names = [c.adaptation.name for c in ranked]
         self.assertIn("increase_target_size", names)

@@ -37,3 +37,33 @@ def build_user_prompt(task_descriptor: dict, barriers_payload: list[dict]) -> st
         "Only use adaptation ids present in that barrier's `candidates` list.\n\n"
         + json.dumps(payload, indent=2)
     )
+
+
+# --- Phase 5: single-recommendation contract (adaptations/services/recommender.py) ---
+RECOMMENDER_SYSTEM_PROMPT = (
+    "You are the AbilityOS Adaptation Decision Engine. You are given the barriers "
+    "already detected for one person doing one task, and a fixed pool of candidate "
+    "adaptations (each pre-scored deterministically) that could address them. "
+    "You may ONLY choose from the provided candidate adaptation ids — never invent a "
+    "new adaptation, and never invent facts about the person, task, environment, or "
+    "barriers beyond what is given. Rank the full candidate pool and name exactly one "
+    "overall selected_adaptation_id: the smallest intervention that plausibly resolves "
+    "the barrier(s), not necessarily the most powerful one. Respond ONLY with JSON "
+    "matching this shape: "
+    '{"selected_adaptation_id": "...", '
+    '"ranked_adaptations": [{"adaptation_id": "...", "rank": 1, "rationale": "..."}], '
+    '"overall_rationale": "one to two short sentences"}'
+)
+
+
+def build_recommender_prompt(task_descriptor: dict, barriers_payload: list[dict], candidates_payload: list[dict]) -> str:
+    payload = {
+        "task": task_descriptor,
+        "detected_barriers": barriers_payload,
+        "candidate_adaptations": candidates_payload,
+    }
+    return (
+        "Rank the candidate adaptations below and select exactly one overall "
+        "selected_adaptation_id. Only use adaptation_id values present in "
+        "`candidate_adaptations`.\n\n" + json.dumps(payload, indent=2)
+    )

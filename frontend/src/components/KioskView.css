@@ -14,6 +14,16 @@
   border: 3px solid #0b1520;
 }
 
+.kiosk__adapted-indicator {
+  align-self: flex-start;
+  background: #0f7a6d;
+  color: #fff;
+  font-size: calc(0.8rem * var(--text-scale));
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
 .kiosk--disabled {
   opacity: 0.55;
   filter: grayscale(0.4);
@@ -60,6 +70,16 @@
 .kiosk__progress {
   font-size: calc(0.95rem * var(--text-scale));
   opacity: 0.9;
+}
+
+.kiosk__back {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+.kiosk__leave {
+  opacity: 0.75;
+  font-size: 0.85rem;
 }
 
 .kiosk__body {

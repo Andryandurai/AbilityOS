@@ -1,0 +1,81 @@
+{
+  "environment_id": "ticket_kiosk_default",
+  "environment_type": "kiosk",
+  "screen": {
+    "width": 1280,
+    "height": 800,
+    "dpi": 96
+  },
+  "controls": [
+    {
+      "id": "destination_button",
+      "x": 100,
+      "y": 180,
+      "width": 120,
+      "height": 45,
+      "label": "Destination",
+      "type": "button"
+    },
+    {
+      "id": "ticket_type_button",
+      "x": 100,
+      "y": 260,
+      "width": 120,
+      "height": 45,
+      "label": "Ticket Type",
+      "type": "button"
+    },
+    {
+      "id": "confirm_button",
+      "x": 100,
+      "y": 500,
+      "width": 120,
+      "height": 45,
+      "label": "Confirm",
+      "type": "button"
+    },
+    {
+      "id": "buy_ticket",
+      "x": 100,
+      "y": 500,
+      "width": 120,
+      "height": 45,
+      "label": "BUY TICKET",
+      "type": "button"
+    },
+    {
+      "id": "dest_central_station",
+      "x": 100,
+      "y": 180,
+      "width": 120,
+      "height": 40,
+      "label": "Central Station",
+      "type": "button"
+    },
+    {
+      "id": "ticket_single",
+      "x": 100,
+      "y": 260,
+      "width": 120,
+      "height": 40,
+      "label": "Single",
+      "type": "button"
+    }
+  ],
+  "contrast": {
+    "level": "low",
+    "background": "#ffffff",
+    "foreground": "#777777"
+  },
+  "noise_level": "moderate",
+  "lighting": "normal",
+  "visible_choice_count": 9,
+  "alerts": [
+    {
+      "id": "confirm_payment_alert",
+      "type": "audio",
+      "critical": true,
+      "has_visual_alternative": false
+    }
+  ]
+}

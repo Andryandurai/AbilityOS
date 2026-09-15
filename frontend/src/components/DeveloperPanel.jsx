@@ -1,5 +1,25 @@
 import "./DeveloperPanel.css";
 
+// Phase 6 section 7: the frontend's known-safe presentation vocabulary —
+// mirrors backend/adaptations/services/config.py's ALLOWED_UI_EFFECT_KEYS.
+// An effect key outside this list is never silently applied; it's
+// surfaced here as a visible developer-facing warning instead.
+const KNOWN_UI_EFFECT_KEYS = new Set([
+  "button_scale",
+  "spacing_scale",
+  "contrast",
+  "text_scale",
+  "flow",
+  "choice_limit",
+  "progress_indicator",
+  "voice_prompts",
+  "tts",
+  "banner_alert",
+  "haptics",
+  "voice_input",
+  "confirm_step",
+]);
+
 const BARRIER_LABELS = {
   small_tap_targets: "Small tap targets",
   low_contrast: "Low contrast / small text",
@@ -34,13 +54,90 @@ function CandidateRow({ candidate, isWinner }) {
  * from Part 3 populated with the real API responses for the current
  * session — not a canned explanation.
  */
-export default function DeveloperPanel({ profile, task, environment, barriers, results, aiUsed, aiError }) {
+const EASE_LABELS = { 1: "1/5 — Very difficult", 2: "2/5 — Difficult", 3: "3/5 — Okay", 4: "4/5 — Easy", 5: "5/5 — Very easy" };
+const HELPFULNESS_LABELS = { helped: "Helped", somewhat_helped: "Somewhat helped", did_not_help: "Did not help" };
+const SESSION_STATUS_LABELS = {
+  started: "Started", analyzed: "Analyzed", adapted: "Adapted", in_progress: "In progress",
+  completed: "Completed", abandoned: "Abandoned", failed: "Failed",
+};
+
+export default function DeveloperPanel({
+  profile, task, environment, barriers, results, appliedAdaptations, aiUsed, aiError,
+  sessionStatus, assistanceCount, completionTimeMs, outcomeScore, learningSignal, feedback,
+}) {
+  // Phase 6 section 34 (Developer/System view): a single consolidated
+  // line showing exactly what's live on the kiosk right now. `results`
+  // is fetched once at recommend-time and its `applied` flag is never
+  // refreshed after the later apply step, so it can't be trusted alone —
+  // `appliedAdaptations` (the apply response's own adaptation-name list)
+  // is the source of truth for what's actually live.
+  const appliedNames = new Set(appliedAdaptations || []);
+  const appliedResults = results.filter((r) => r.applied || appliedNames.has(r.adaptation?.name));
+
+  // Defensive/visible-only check: flag any ui_effects key the frontend
+  // doesn't recognize. KioskView already ignores unknown keys when
+  // rendering, so this never changes behavior — it just makes an
+  // unrecognized key visible to a developer instead of silently doing
+  // nothing.
+  const unknownEffectKeys = [
+    ...new Set(
+      appliedResults.flatMap((r) => Object.keys(r.adaptation?.ui_effects || {})).filter((key) => !KNOWN_UI_EFFECT_KEYS.has(key))
+    ),
+  ];
+
+  // Phase 8 section 56: a judge-legible "at a glance" summary — the same
+  // facts the sections below show in full detail, condensed into one row
+  // so a judge can read the whole story without scrolling.
+  const primaryBarrier = barriers[0];
+  const primaryAdaptation = appliedResults[0]?.adaptation?.display_name;
+  const resultText =
+    sessionStatus === "completed"
+      ? assistanceCount > 0
+        ? "Completed with assistance"
+        : "Completed independently"
+      : sessionStatus === "abandoned"
+        ? "Not completed"
+        : sessionStatus
+          ? "In progress"
+          : "Not started yet";
+
   return (
     <div className="card dev-panel">
       <h2>Developer / Explanation Panel</h2>
       <p className="dev-panel__subtitle">
         PERSON → ABILITY PROFILE → TASK → ENVIRONMENT → BARRIER DETECTION → ADAPTATION DECISION → SAFETY VALIDATION →
         RESULT
+      </p>
+
+      <dl className="dev-panel__glance">
+        <div>
+          <dt>WHO</dt>
+          <dd>{profile?.label || "—"}</dd>
+        </div>
+        <div>
+          <dt>WHAT</dt>
+          <dd>{task?.name || "—"}</dd>
+        </div>
+        <div>
+          <dt>WHERE</dt>
+          <dd>{environment?.environment_id || "—"}</dd>
+        </div>
+        <div>
+          <dt>WHY</dt>
+          <dd>{primaryBarrier ? BARRIER_LABELS[primaryBarrier.barrier_type] || primaryBarrier.barrier_type : "No barrier detected"}</dd>
+        </div>
+        <div>
+          <dt>CHANGE</dt>
+          <dd>{primaryAdaptation || "None applied"}</dd>
+        </div>
+        <div>
+          <dt>RESULT</dt>
+          <dd>{resultText}</dd>
+        </div>
+      </dl>
+
+      <p className="dev-panel__user">
+        User: <strong>{profile?.label || "—"}</strong>
       </p>
 
       <section className="dev-panel__section">
@@ -112,7 +209,7 @@ export default function DeveloperPanel({ profile, task, environment, barriers, r
           <div key={r.id} className="dev-panel__decision">
             <h4>
               Barrier: {BARRIER_LABELS[r.barrier_type] || r.barrier_type} →{" "}
-              <span className="pill pill--low">{r.display_name}</span>
+              <span className="pill pill--low">{r.adaptation.display_name}</span>
               {r.requires_confirmation && <RiskPill level="high" />}
             </h4>
             <p className="dev-panel__rationale">&ldquo;{r.rationale}&rdquo;</p>
@@ -126,11 +223,89 @@ export default function DeveloperPanel({ profile, task, environment, barriers, r
             </details>
             <p className="dev-panel__validation">
               Rule engine: {r.approved ? "✓ approved" : "✗ rejected"}
-              {r.applied ? " · applied to the interface" : ""}
+              {(r.applied || appliedNames.has(r.adaptation?.name)) ? " · applied to the interface" : ""}
             </p>
           </div>
         ))}
+
+        <p className="dev-panel__applied-summary">
+          {appliedResults.length > 0
+            ? `Applied: ✓ ${appliedResults.map((r) => r.adaptation.display_name).join(", ")}`
+            : "Applied: none yet — waiting for confirmation or apply step."}
+        </p>
+        {unknownEffectKeys.length > 0 && (
+          <p className="dev-panel__ai-note" role="status">
+            Note: applied adaptation includes unrecognized effect key(s) ({unknownEffectKeys.join(", ")}) — ignored by
+            the kiosk renderer, standard presentation used for those.
+          </p>
+        )}
       </section>
+
+      {sessionStatus && (
+        <section className="dev-panel__section">
+          <h3>
+            Outcome{" "}
+            <span className="pill pill--neutral">{SESSION_STATUS_LABELS[sessionStatus] || sessionStatus}</span>
+          </h3>
+          <ul className="dev-panel__dims">
+            <li>
+              Interaction: completed in{" "}
+              <strong>{completionTimeMs != null ? `${Math.round(completionTimeMs / 1000)} sec` : "—"}</strong>
+            </li>
+            <li>
+              Assistance:{" "}
+              <strong>
+                {assistanceCount == null
+                  ? "—"
+                  : assistanceCount === 0
+                    ? "No"
+                    : `Yes (${assistanceCount} request${assistanceCount > 1 ? "s" : ""})`}
+              </strong>
+            </li>
+            {feedback && (
+              <>
+                <li>
+                  Feedback:{" "}
+                  <strong>{feedback.ease_rating ? EASE_LABELS[feedback.ease_rating] : "not rated"}</strong>
+                </li>
+                {feedback.adaptation_helpfulness && (
+                  <li>
+                    Adaptation helpful: <strong>{HELPFULNESS_LABELS[feedback.adaptation_helpfulness]}</strong>
+                  </li>
+                )}
+              </>
+            )}
+          </ul>
+
+          {outcomeScore && (
+            <p className="dev-panel__evidence">
+              Outcome score (Phase 7 section 18, deterministic — see analytics/config.py):{" "}
+              <strong>{outcomeScore.score.toFixed(2)}</strong> / 1.00
+            </p>
+          )}
+
+          {learningSignal ? (
+            <div className="dev-panel__decision">
+              <h4>Learning signal</h4>
+              <p className="dev-panel__validation">
+                {learningSignal.independence_improved ? "✓ Positive" : learningSignal.successful ? "Partial" : "✗ Negative"}
+                {" · "}
+                <span className="dev-panel__evidence">
+                  {learningSignal.adaptation_id} resolved {learningSignal.barrier_type} for {learningSignal.task_id}
+                </span>
+              </p>
+              <p className="dev-panel__evidence">
+                Structured evidence, not a statistical claim — confidence {learningSignal.confidence.toFixed(2)} from
+                this one session (Phase 7 section 50).
+              </p>
+            </div>
+          ) : (
+            <p className="dev-panel__evidence">
+              No learning signal for this session (no adaptation was applied, or feedback hasn't been submitted yet).
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

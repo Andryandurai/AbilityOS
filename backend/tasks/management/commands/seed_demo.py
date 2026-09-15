@@ -19,6 +19,7 @@ from pathlib import Path
 
 from django.contrib.auth.hashers import make_password
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from abilities.models import AbilityProfile
 from adaptations.models import Adaptation
@@ -186,76 +187,100 @@ TASK_STEPS = [
         step_id="select_destination",
         order=1,
         name="Select destination",
+        description="Choose where the ticket is for.",
+        required=True,
         controls=[
-            {"id": "dest_central_station", "type": "button", "label": "Central Station"},
-            {"id": "dest_airport", "type": "button", "label": "Airport"},
-            {"id": "dest_hospital", "type": "button", "label": "Hospital"},
-            {"id": "dest_university", "type": "button", "label": "University"},
+            {"id": "dest_central_station", "type": "button", "label": "Central Station", "interaction_type": "touch"},
+            {"id": "dest_airport", "type": "button", "label": "Airport", "interaction_type": "touch"},
+            {"id": "dest_hospital", "type": "button", "label": "Hospital", "interaction_type": "touch"},
+            {"id": "dest_university", "type": "button", "label": "University", "interaction_type": "touch"},
         ],
     ),
     dict(
         step_id="select_ticket_type",
         order=2,
         name="Select ticket type",
+        description="Choose a single or return ticket.",
+        required=True,
         controls=[
-            {"id": "ticket_single", "type": "button", "label": "Single"},
-            {"id": "ticket_return", "type": "button", "label": "Return"},
+            {"id": "ticket_single", "type": "button", "label": "Single", "interaction_type": "touch"},
+            {"id": "ticket_return", "type": "button", "label": "Return", "interaction_type": "touch"},
         ],
     ),
     dict(
         step_id="select_quantity",
         order=3,
         name="Select quantity",
+        description="Choose how many tickets to buy.",
+        required=True,
         controls=[
-            {"id": "quantity_minus", "type": "button", "label": "-"},
-            {"id": "quantity_plus", "type": "button", "label": "+"},
+            {"id": "quantity_minus", "type": "button", "label": "-", "interaction_type": "touch"},
+            {"id": "quantity_plus", "type": "button", "label": "+", "interaction_type": "touch"},
         ],
     ),
     dict(
         step_id="confirm_purchase",
         order=4,
         name="Confirm purchase",
-        controls=[{"id": "buy_ticket", "type": "button", "label": "BUY TICKET"}],
+        description="Review and confirm the purchase.",
+        required=True,
+        controls=[{"id": "buy_ticket", "type": "button", "label": "BUY TICKET", "interaction_type": "touch"}],
     ),
 ]
 
+# The three demo personas, exactly as specified (Phase 2 section 11).
+# `display_name` (User) is the account-level name; `label` (AbilityProfile)
+# is the punchier card title the profile-selector UI shows (Phase 2
+# section 10) — two different fields already existed for exactly this.
 DEMO_PROFILES = [
     dict(
         username="demo_low_vision_dexterity",
-        display_name="Low Vision + Reduced Dexterity",
+        display_name="Demo User — Low Vision",
         label="Low Vision + Reduced Dexterity",
         dimensions={
             "vision": {"level": "large-text-needed", "confidence": 0.85, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
             "dexterity": {"level": "reduced-precision", "confidence": 0.8, "source": "manual"},
-            "hearing": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "cognition": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "default"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
         },
-        preferred_modality=AbilityProfile.MODALITY_MIXED,
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
     ),
     dict(
         username="demo_hearing_difficulty",
-        display_name="Hearing Difficulty",
+        display_name="Demo User — Hearing Difficulty",
         label="Hearing Difficulty",
         dimensions={
-            "hearing": {"level": "partial", "confidence": 0.82, "source": "manual"},
-            "vision": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "dexterity": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "cognition": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "default"},
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "relies-on-visual", "confidence": 0.82, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
         },
         preferred_modality=AbilityProfile.MODALITY_MIXED,
     ),
     dict(
         username="demo_cognitive_load",
-        display_name="Cognitive Load",
+        display_name="Demo User — Cognitive Load",
         label="Cognitive Load",
         dimensions={
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
             "cognition": {"level": "needs-step-by-step", "confidence": 0.78, "source": "manual"},
-            "vision": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "dexterity": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "hearing": {"level": "typical", "confidence": 0.5, "source": "default"},
-            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "default"},
+            "fatigue": {"level": "moderate", "confidence": 0.6, "source": "manual"},
+            "reaction_speed": {"level": "slower", "confidence": 0.6, "source": "manual"},
         },
         preferred_modality=AbilityProfile.MODALITY_VISUAL,
     ),
@@ -270,6 +295,7 @@ class Command(BaseCommand):
 
         task = self._seed_task()
         environment = self._seed_environment()
+        self._seed_phase3_environment()
         self._seed_adaptations()
         profiles = self._seed_profiles()
         self._seed_example_sessions(task, environment, profiles)
@@ -307,6 +333,27 @@ class Command(BaseCommand):
         self.stdout.write(f"  environment: {environment.environment_id}")
         return environment
 
+    def _seed_phase3_environment(self) -> Environment:
+        """The Phase 3 Task/Environment Understanding demo's own fixture —
+        separate from `kiosk_standard` (which the real barrier-detection
+        pipeline depends on) so this phase's richer descriptor shape
+        (nested contrast, lighting, per-control x/y) can't regress it."""
+
+        fixture_path = Path(__file__).resolve().parents[3] / "environments" / "fixtures" / "ticket_kiosk_default.json"
+        with open(fixture_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        environment, _ = Environment.objects.update_or_create(
+            environment_id=data["environment_id"],
+            defaults={
+                "name": "Ticket Kiosk — Default",
+                "source": Environment.SOURCE_FIXTURE,
+                "data": data,
+            },
+        )
+        self.stdout.write(f"  environment (phase 3): {environment.environment_id}")
+        return environment
+
     def _seed_adaptations(self) -> None:
         for entry in ADAPTATION_CATALOGUE:
             entry = dict(entry)
@@ -335,10 +382,21 @@ class Command(BaseCommand):
                     "preferred_modality": spec["preferred_modality"],
                 },
             )
-            # Deliberately left ungranted: the consent gate (Part 27) is a
-            # visible step in the demo flow, not a formality to skip. The
-            # presenter clicks "I Agree" for each persona on first use.
-            ConsentRecord.objects.get_or_create(user=user, defaults={"granted": False, "scope": []})
+            # Phase 2 spec section 11: "All demo profiles must have:
+            # consent = granted." The Consent screen is still a real,
+            # visible step in the Select User -> Consent -> Profile ->
+            # Summary journey (it pre-checks the box to reflect this and
+            # still performs a real POST on Continue) — pre-granting it
+            # here just means a fresh install doesn't start every demo
+            # persona in a "blocked" state.
+            ConsentRecord.objects.update_or_create(
+                user=user,
+                defaults={
+                    "granted": True,
+                    "scope": [ConsentRecord.SCOPE_INTERACTION_ADAPTATION],
+                    "granted_at": timezone.now(),
+                },
+            )
             users.append(user)
         self.stdout.write(f"  demo profiles: {', '.join(u.username for u in users)}")
         return users
@@ -359,9 +417,9 @@ class Command(BaseCommand):
         # "Without AbilityOS": barriers detected, but nothing applied — the
         # struggle scenario, run three times with worsening outcomes.
         baseline_outcomes = [
-            dict(completed=False, errors=5, time_seconds=95, assistance_requested=True, effort=5, confidence=2),
-            dict(completed=True, errors=4, time_seconds=81, assistance_requested=True, effort=4, confidence=2),
-            dict(completed=True, errors=3, time_seconds=74, assistance_requested=False, effort=4, confidence=3),
+            dict(completed=False, errors=5, time_seconds=95, assistance_requested=True, effort=5, confidence=2, ease_rating=1),
+            dict(completed=True, errors=4, time_seconds=81, assistance_requested=True, effort=4, confidence=2, ease_rating=2),
+            dict(completed=True, errors=3, time_seconds=74, assistance_requested=False, effort=4, confidence=3, ease_rating=2),
         ]
         for outcome in baseline_outcomes:
             session = InteractionSession.objects.create(
@@ -380,9 +438,9 @@ class Command(BaseCommand):
 
         # "With AbilityOS": barriers detected AND resolved, then a clean run.
         with_outcomes = [
-            dict(completed=True, errors=1, time_seconds=50, assistance_requested=False, effort=2, confidence=4),
-            dict(completed=True, errors=0, time_seconds=42, assistance_requested=False, effort=1, confidence=5),
-            dict(completed=True, errors=0, time_seconds=39, assistance_requested=False, effort=1, confidence=5),
+            dict(completed=True, errors=1, time_seconds=50, assistance_requested=False, effort=2, confidence=4, ease_rating=4, adaptation_helpfulness="helped"),
+            dict(completed=True, errors=0, time_seconds=42, assistance_requested=False, effort=1, confidence=5, ease_rating=5, adaptation_helpfulness="helped"),
+            dict(completed=True, errors=0, time_seconds=39, assistance_requested=False, effort=1, confidence=5, ease_rating=5, adaptation_helpfulness="helped"),
         ]
         for outcome in with_outcomes:
             session = InteractionSession.objects.create(

@@ -1,5 +1,62 @@
 # Architecture
 
+## Top-level system
+
+```
+React Frontend
+      │
+      ▼
+Django REST Framework
+      │
+      ▼
+AbilityOS Core            (barrier detection, adaptation scoring, safety rules)
+      │
+      ▼
+PostgreSQL                (SQLite fallback for local development)
+      │
+      ▼
+External LLM / Vision services     (optional — AI Decision Engine, computer vision)
+```
+
+`AbilityOS Core` is not a separate service or deployable — it's the collective name
+for the app-level services under `backend/*/services/` (barrier detection,
+adaptation scoring, the AI decision engine, the safety rule engine) that
+`InteractionOrchestrator` calls in sequence. See below for exactly how.
+
+## The product loop
+
+The technical "core loop" below implements this conceptual chain — every arrow is
+a real, working transition in this codebase, not aspirational:
+
+```
+Ability Profile   (abilities.AbilityProfile — functional, never diagnostic)
+      │
+      ▼
+Task              (tasks.Task / TaskStep — what the person is trying to do)
+      │
+      ▼
+Environment        (environments.Environment — fixture or vision-derived facts)
+      │
+      ▼
+Barrier            (barriers.services.detection — deterministic mismatch detection)
+      │
+      ▼
+Adaptation         (adaptations.services.scoring + optional AI — candidate selection)
+      │
+      ▼
+Safety             (adaptations.services.rules — independent re-validation)
+      │
+      ▼
+Kiosk              (frontend/src/components/KioskView.jsx — the approved
+      │              adaptation actually renders)
+      ▼
+Outcome            (feedback.InteractionSession/InteractionEvent — completion,
+      │              errors, assistance, all server-authoritative)
+      ▼
+Learning Signal     (analytics.services.generate_learning_signal — structured,
+                      non-mutating evidence; see docs/PHASE_7.md)
+```
+
 ## The core loop
 
 ```
@@ -36,15 +93,18 @@ Every stage in the table below is one REST call from the frontend and one method
 | Barrier detection | `POST /api/barriers/detect/` | `detect_barriers()` |
 | Candidate generation + AI reasoning + safety validation | `POST /api/adaptations/recommend/` | `recommend_adaptations()` |
 | Apply approved adaptation(s) | `POST /api/interactions/{id}/apply/` | `apply()` |
-| Feedback + learning update | `POST /api/interactions/{id}/feedback/` | `record_feedback()` |
+| Step-level interaction tracking (Phase 7) | `POST /api/interactions/{id}/events/` | `record_event()` / `record_events()` |
+| Explicit completion (Phase 7) | `POST /api/interactions/{id}/complete/` | `complete()` |
+| Explicit abandonment (Phase 7) | `POST /api/interactions/{id}/abandon/` | `abandon()` |
+| Feedback | `POST /api/interactions/{id}/feedback/` | `record_feedback()` |
 | Developer panel summary | `GET /api/interactions/{id}/summary/` | `summary()` |
 
 ## Django apps ↔ spec's 12 conceptual modules
 
 | Spec module | Django app / file |
 |---|---|
-| User & Consent Management | `users/` (`User`, `ConsentRecord`) |
-| Ability Profile Manager | `abilities/` (`AbilityProfile`) |
+| User & Consent Management | `users/` (`User`, `ConsentRecord`, `users/services/consent_service.py`) |
+| Ability Profile Manager | `abilities/` (`AbilityProfile`, `abilities/constants.py`, `abilities/services/profile_service.py`) |
 | Task Understanding Engine | `tasks/` (`Task`, `TaskStep`) |
 | Environment Understanding Engine | `environments/` (`Environment`) + `ai_engine/services/vision_service.py` |
 | Barrier Detection Engine | `barriers/services/detection.py` |
@@ -53,8 +113,8 @@ Every stage in the table below is one REST call from the frontend and one method
 | Adaptive UI Renderer | `frontend/src/components/KioskView.jsx` |
 | Voice Interface | `KioskView.jsx` (`speak()` via Web Speech API) |
 | Haptic Feedback Layer | `KioskView.jsx` (`vibrate()` via the Vibration API) |
-| Feedback & Learning Engine | `feedback/` + `AbilityProfile.update_dimension_confidence()` |
-| Analytics / Evaluation Module | `analytics/views.py` |
+| Feedback & Learning Engine | `feedback/` (`InteractionEvent`, `Feedback`) + `analytics/services.py`'s on-demand, non-mutating learning signal — see [PHASE_7.md](PHASE_7.md) for why the earlier automatic `AbilityProfile.update_dimension_confidence()` hook was retired |
+| Analytics / Evaluation Module | `analytics/views.py` + `analytics/services.py` (Phase 7: outcome score, adaptation/barrier effectiveness) |
 
 The Safety Rule Engine (`adaptations/services/rules.py`) is the one addition beyond
 this list, called out separately in the spec's Part 7/26 — it is what actually
@@ -84,17 +144,21 @@ See [AI_DECISION_ENGINE.md](AI_DECISION_ENGINE.md) for the full contract.
 ```
 frontend/src/
 ├── services/api.js        one function per REST endpoint
-├── hooks/useAbilityOSDemo.js   drives the pipeline (start → analyze → ... → apply)
+├── hooks/useAbilityOSDemo.js   drives the pipeline (start → ... → apply → events →
+│                                complete/abandon → feedback)
 ├── components/
 │   ├── ConsentGate.jsx      Part 27 consent step
-│   ├── ProfileSwitcher.jsx  switch between the 3 demo personas
-│   ├── KioskView.jsx        the simulated kiosk — real adaptive rendering
-│   ├── DeveloperPanel.jsx   judge-facing "why" panel (Part 14/39)
+│   ├── KioskView.jsx        the simulated kiosk — real adaptive rendering + Phase 7
+│   │                        event firing
+│   ├── FeedbackForm.jsx     Phase 7 short, user-facing feedback screen
+│   ├── OutcomeSummary.jsx   Phase 7 plain-language outcome summary
+│   ├── DeveloperPanel.jsx   judge-facing "why" panel, extended in Phase 7 with the
+│   │                        Outcome/Assistance/Feedback/Learning Signal chain
 │   ├── ConfirmDialog.jsx    high-risk adaptation confirmation gate
 │   └── MetricsPanel.jsx     before/after table
 ├── pages/
 │   ├── DemoPage.jsx         wires the above together
-│   └── AnalyticsPage.jsx    Part 22 dashboard
+│   └── AnalyticsPage.jsx    Phase 7 accessibility outcomes dashboard
 └── App.jsx / main.jsx
 ```
 

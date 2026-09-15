@@ -11,7 +11,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, ValidationError
 
-__all__ = ["AIDecision", "AIDecisionResponse", "ValidationError"]
+__all__ = [
+    "AIDecision",
+    "AIDecisionResponse",
+    "AdaptationRanking",
+    "AdaptationRecommendationResponse",
+    "ValidationError",
+]
 
 
 class AIDecision(BaseModel):
@@ -23,3 +29,20 @@ class AIDecision(BaseModel):
 
 class AIDecisionResponse(BaseModel):
     decisions: list[AIDecision]
+
+
+# --- Phase 5: single-recommendation contract (adaptations/services/recommender.py) ---
+# A separate schema from AIDecisionResponse above (which decides one
+# adaptation per barrier, independently) — this one ranks the *entire*
+# candidate pool across all detected barriers and names one overall winner,
+# matching the "select ONE primary adaptation" MVP scope (Phase 5 section 28).
+class AdaptationRanking(BaseModel):
+    adaptation_id: str
+    rank: int = Field(ge=1)
+    rationale: str = Field(min_length=1, max_length=400)
+
+
+class AdaptationRecommendationResponse(BaseModel):
+    selected_adaptation_id: str
+    ranked_adaptations: list[AdaptationRanking]
+    overall_rationale: str = Field(min_length=1, max_length=600)

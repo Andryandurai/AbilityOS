@@ -138,6 +138,17 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.AllowAny",),
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "EXCEPTION_HANDLER": "api.exceptions.abilityos_exception_handler",
+    # Phase 8 section 28: lightweight, IP-based rate limiting on the few
+    # endpoints worth protecting (auth, session creation, the AI-adjacent
+    # recommend call). ScopedRateThrottle only throttles a view that opts
+    # in via `throttle_scope` (see api/views.py, users/views.py) — every
+    # other endpoint is unaffected by adding this globally.
+    "DEFAULT_THROTTLE_CLASSES": ("rest_framework.throttling.ScopedRateThrottle",),
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login": "10/min",
+        "session_start": "30/min",
+        "adaptation_recommend": "30/min",
+    },
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -167,13 +178,18 @@ AI_AVAILABLE = bool(AI_PROVIDER not in ("", "none") and AI_API_KEY)
 # install never breaks the JSON-fixture demo path.
 VISION_ENABLED = env_bool("VISION_ENABLED", False)
 
+# Phase 8 audit: "api" logs (api/services/orchestrator.py, api/exceptions.py)
+# but wasn't listed here, so its .info()/.exception() calls were silently
+# dropped at the root logger's WARNING threshold. "barriers" was listed but
+# nothing in that app actually logs — left out below rather than kept as
+# dead configuration.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "loggers": {
+        "api": {"handlers": ["console"], "level": "INFO"},
         "ai_engine": {"handlers": ["console"], "level": "INFO"},
-        "barriers": {"handlers": ["console"], "level": "INFO"},
         "adaptations": {"handlers": ["console"], "level": "INFO"},
     },
     "root": {"handlers": ["console"], "level": "WARNING"},

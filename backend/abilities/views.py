@@ -1,44 +1,65 @@
 from django.shortcuts import get_object_or_404
+from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from abilities.models import AbilityProfile
 from abilities.serializers import AbilityProfileSerializer
+from abilities.services.profile_service import (
+    ProfileValidationError,
+    apply_manual_update,
+    clear_profile,
+    get_or_create_profile,
+)
 from users.models import User
+from users.services.ownership import assert_owner
+
+
+def _assert_ownership(request, user_id):
+    assert_owner(request, user_id, "You may only edit your own Ability Profile.")
 
 
 class AbilityProfileView(APIView):
-    """GET/PATCH /api/users/{id}/ability-profile/ (Part 11).
+    """GET/PATCH/DELETE /api/users/{id}/ability-profile/ (Phase 2 section 12).
 
-    Manual edits always take priority over inferred values (Part 20) — a
-    PATCH here simply overwrites whichever dimensions are supplied, tagging
-    them with source='manual' unless the caller says otherwise.
+    Views stay thin — all the validation and "manual beats inferred beats
+    default" logic lives in abilities.services.profile_service.
     """
 
     permission_classes = [AllowAny]
 
     def get(self, request, user_id):
         user = get_object_or_404(User, pk=user_id)
-        profile, _ = AbilityProfile.objects.get_or_create(user=user)
+        profile = get_or_create_profile(user)
         return Response(AbilityProfileSerializer(profile).data)
 
     def patch(self, request, user_id):
+        _assert_ownership(request, user_id)
         user = get_object_or_404(User, pk=user_id)
-        profile, _ = AbilityProfile.objects.get_or_create(user=user)
+        profile = get_or_create_profile(user)
 
-        incoming_dims = request.data.get("dimensions")
-        if incoming_dims:
-            merged = dict(profile.dimensions)
-            for key, val in incoming_dims.items():
-                val.setdefault("source", "manual")
-                val.setdefault("confidence", 0.9)
-                merged[key] = val
-            profile.dimensions = merged
+        if "label" in request.data:
+            profile.label = request.data["label"]
+            profile.save(update_fields=["label"])
 
-        for field in ("label", "preferred_modality", "preferences"):
-            if field in request.data:
-                setattr(profile, field, request.data[field])
+        try:
+            apply_manual_update(
+                profile,
+                dimensions=request.data.get("dimensions"),
+                preferred_modality=request.data.get("preferred_modality"),
+                preferences=request.data.get("preferences"),
+            )
+        except ProfileValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        profile.save()
+        return Response(AbilityProfileSerializer(profile).data)
+
+    def delete(self, request, user_id):
+        """Phase 2 section 22 ("Clear Profile"): resets functional values to
+        their defaults. The user account itself is never deleted here."""
+
+        _assert_ownership(request, user_id)
+        user = get_object_or_404(User, pk=user_id)
+        profile = get_or_create_profile(user)
+        clear_profile(profile)
         return Response(AbilityProfileSerializer(profile).data)

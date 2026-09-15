@@ -1,0 +1,83 @@
+.task-env {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.task-env__selected-user {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.task-env__selector {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.task-env__description {
+  color: var(--color-text-muted);
+  margin: 4px 0 0 0;
+}
+
+.task-env__error {
+  color: var(--color-danger);
+  margin-top: var(--space-3);
+}
+
+.task-env__descriptor {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.task-env__steps {
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.task-env__controls {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.task-env__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.task-env__facts dt {
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent-strong);
+}
+
+.task-env__facts dd {
+  margin: 2px 0 0 0;
+}
+
+.task-env__next {
+  border-color: var(--color-accent);
+}
+
+.task-env__back {
+  margin-top: var(--space-4);
+}
+
+.task-env__recommend {
+  margin-top: var(--space-4);
+}

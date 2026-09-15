@@ -1,33 +1,20 @@
 from django.conf import settings
 from django.db import models
 
-# The ten functional dimensions from Part 4 of the AbilityOS spec. Each is
-# stored as {"level": str, "confidence": float, "source": str} inside the
-# `dimensions` JSONField below — a deliberate, spec-sanctioned shortcut
-# ("...or as a JSON field on the user profile for speed") that keeps the
-# schema flexible without inventing a diagnosis system.
-DIMENSION_KEYS = [
-    "vision",
-    "hearing",
-    "dexterity",
-    "reach",
-    "mobility",
-    "speech",
-    "cognition",
-    "fatigue",
-    "reaction_speed",
-]
+from abilities.constants import ALLOWED_SOURCES, DEFAULT_LEVEL, DIMENSION_KEYS, SOURCE_DEFAULT, SOURCE_MANUAL
 
-SOURCE_MANUAL = "manual"
-SOURCE_INFERRED = "inferred"
-SOURCE_DEFAULT = "default"
-SOURCE_SESSION_SIGNAL = "session_signal"
-
-DEFAULT_DIMENSION = {"level": "typical", "confidence": 0.5, "source": SOURCE_DEFAULT}
+__all__ = ["AbilityProfile", "DIMENSION_KEYS", "default_dimensions"]
 
 
 def default_dimensions():
-    return {key: dict(DEFAULT_DIMENSION) for key in DIMENSION_KEYS}
+    """Every dimension's own "no barrier" baseline — not a single shared
+    value, since some dimensions (reach, fatigue) don't have "typical" in
+    their controlled vocabulary at all (Phase 2 spec section 4)."""
+
+    return {
+        key: {"level": DEFAULT_LEVEL[key], "confidence": 0.5, "source": SOURCE_DEFAULT}
+        for key in DIMENSION_KEYS
+    }
 
 
 class AbilityProfile(models.Model):
@@ -40,13 +27,13 @@ class AbilityProfile(models.Model):
     MODALITY_VISUAL = "visual"
     MODALITY_VOICE = "voice"
     MODALITY_HAPTIC = "haptic"
-    MODALITY_MIXED = "visual+haptic"
+    MODALITY_MIXED = "mixed"
 
     MODALITY_CHOICES = [
         (MODALITY_VISUAL, "Visual"),
         (MODALITY_VOICE, "Voice"),
         (MODALITY_HAPTIC, "Haptic"),
-        (MODALITY_MIXED, "Visual + Haptic"),
+        (MODALITY_MIXED, "Mixed (visual + haptic)"),
     ]
 
     user = models.OneToOneField(
@@ -71,11 +58,21 @@ class AbilityProfile(models.Model):
         return self.label or f"AbilityProfile<{self.user.username}>"
 
     def dimension(self, key, default=None):
-        return self.dimensions.get(key, default or dict(DEFAULT_DIMENSION))
+        if default is not None:
+            return self.dimensions.get(key, default)
+        fallback = {"level": DEFAULT_LEVEL.get(key, "typical"), "confidence": 0.5, "source": SOURCE_DEFAULT}
+        return self.dimensions.get(key, fallback)
 
     def set_dimension(self, key, level, confidence=0.7, source=SOURCE_MANUAL):
+        """Low-level setter used by tests/services that have already
+        validated `level`/`source` against abilities.constants — prefer
+        abilities.services.profile_service for anything reachable from an
+        API request, since that layer enforces the controlled vocabulary."""
+
         if key not in DIMENSION_KEYS:
             raise ValueError(f"Unknown ability dimension: {key}")
+        if source not in ALLOWED_SOURCES:
+            raise ValueError(f"Unknown source: {source}")
         dims = dict(self.dimensions)
         dims[key] = {"level": level, "confidence": confidence, "source": source}
         self.dimensions = dims

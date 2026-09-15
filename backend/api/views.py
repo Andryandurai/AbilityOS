@@ -6,28 +6,85 @@ the response. All the actual reasoning lives in the app-level services.
 
 from __future__ import annotations
 
+import django
+from django.conf import settings
+from django.db import connection
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from abilities.services.profile_service import get_or_create_profile
 from adaptations.serializers import AdaptationResultSerializer
-from api.services.orchestrator import InteractionOrchestrator
+from adaptations.services.recommender import AdaptationRecommender
+from api.services.orchestrator import InteractionOrchestrator, OrchestratorError
 from barriers.serializers import BarrierSerializer
+from barriers.services.detector import BarrierDetectionService
 from environments.serializers import EnvironmentSerializer
+from environments.services.analyzer import EnvironmentAnalyzer, EnvironmentNotFoundError
 from feedback.models import InteractionSession
-from feedback.serializers import FeedbackSerializer
+from feedback.serializers import FeedbackSerializer, InteractionEventSerializer
+from tasks.services.task_service import TaskNotFoundError, get_task_descriptor
 from users.models import User
+from users.services.consent_service import is_consented_for_adaptation
+from users.services.ownership import assert_owner
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health(request):
+    """GET /api/health/ — Phase 1 foundation check.
+
+    Proves the full React -> Django -> Database chain actually works, not
+    just that the process is alive: it runs a real query against whichever
+    database is configured (PostgreSQL via DATABASE_URL, or the SQLite
+    development fallback) and reports what it found.
+    """
+
+    db_engine = connection.settings_dict.get("ENGINE", "")
+    db_ok = True
+    db_error = None
+    user_count = None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        user_count = User.objects.count()
+    except Exception as exc:  # pragma: no cover - defensive, exercised only if DB is down
+        db_ok = False
+        db_error = str(exc)
+
+    return Response(
+        {
+            "status": "ok" if db_ok else "degraded",
+            "service": "AbilityOS API",
+            "django_version": django.get_version(),
+            "database": {
+                "engine": "postgresql" if "postgresql" in db_engine else "sqlite",
+                "connected": db_ok,
+                "error": db_error,
+                "seeded_user_count": user_count,
+            },
+            "ai_decision_engine": {
+                "provider": settings.AI_PROVIDER,
+                "configured": settings.AI_AVAILABLE,
+            },
+        },
+        status=status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
 
 
 class StartInteractionView(APIView):
     """POST /api/interactions/start/ — {"user_id", "task_id", "environment_id"?, "baseline_mode"?}."""
 
     permission_classes = [AllowAny]
+    throttle_scope = "session_start"
 
     def post(self, request):
         user = get_object_or_404(User, pk=request.data.get("user_id"))
+        assert_owner(request, user.id, "You may only start a session for your own profile.")
         task_id = request.data.get("task_id")
         if not task_id:
             return Response({"detail": "task_id is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -42,12 +99,39 @@ class StartInteractionView(APIView):
 
 
 class AnalyzeEnvironmentView(APIView):
-    """POST /api/environment/analyze/ — {"session_id", "image_base64"?}."""
+    """POST /api/environment/analyze/
+
+    Two calling conventions on the same endpoint:
+    - {"session_id", "image_base64"?} — the existing orchestrator-driven
+      flow (Part 5/14), attaches the analyzed environment to a live
+      InteractionSession.
+    - {"environment_id"} with no session_id — the Phase 3 Task/Environment
+      Understanding demo: a standalone, deterministic fixture lookup that
+      returns an EnvironmentDescriptor with no session involved. This is
+      the Environment Understanding Engine's actual entry point; the
+      session-based form above is what the orchestrator uses internally.
+    """
 
     permission_classes = [AllowAny]
 
     def post(self, request):
-        session = get_object_or_404(InteractionSession, pk=request.data.get("session_id"))
+        session_id = request.data.get("session_id")
+        environment_id = request.data.get("environment_id")
+
+        if not session_id:
+            if not environment_id:
+                return Response(
+                    {"detail": "Provide either session_id or environment_id."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                descriptor = EnvironmentAnalyzer.analyze_fixture(environment_id)
+            except EnvironmentNotFoundError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+            return Response(descriptor)
+
+        session = get_object_or_404(InteractionSession, pk=session_id)
+        assert_owner(request, session.user_id, "You may only access your own session.")
         environment = InteractionOrchestrator.analyze_environment(
             session, image_base64=request.data.get("image_base64")
         )
@@ -60,30 +144,135 @@ class AnalyzeEnvironmentView(APIView):
 
 
 class DetectBarriersView(APIView):
-    """POST /api/barriers/detect/ — {"session_id"}."""
+    """POST /api/barriers/detect/
+
+    Two calling conventions on the same endpoint (same pattern as
+    AnalyzeEnvironmentView — Phase 3):
+    - {"session_id"} — the existing orchestrator-driven flow, persists
+      Barrier rows against a live InteractionSession.
+    - {"user_id", "task_id", "environment_id"} — the Phase 4 Barrier
+      Detection Engine demo: a standalone, deterministic, non-persisting
+      call. Reuses the exact Phase 2/3 services (profile_service,
+      task_service, EnvironmentAnalyzer) rather than re-fetching or
+      re-deriving any of that data itself.
+    """
 
     permission_classes = [AllowAny]
 
     def post(self, request):
-        session = get_object_or_404(InteractionSession, pk=request.data.get("session_id"))
-        barriers = InteractionOrchestrator.detect_barriers(session)
-        return Response({"barriers": BarrierSerializer(barriers, many=True).data})
+        session_id = request.data.get("session_id")
+        if session_id:
+            session = get_object_or_404(InteractionSession, pk=session_id)
+            assert_owner(request, session.user_id, "You may only access your own session.")
+            barriers = InteractionOrchestrator.detect_barriers(session)
+            return Response({"barriers": BarrierSerializer(barriers, many=True).data})
+
+        return self._detect_standalone(request)
+
+    def _detect_standalone(self, request):
+        user_id = request.data.get("user_id")
+        task_id = request.data.get("task_id")
+        environment_id = request.data.get("environment_id")
+
+        if not (user_id and task_id and environment_id):
+            return Response(
+                {"detail": "Provide session_id, or all of user_id/task_id/environment_id."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = get_object_or_404(User, pk=user_id)
+        assert_owner(request, user.id, "You may only run barrier detection for your own profile.")
+
+        if not is_consented_for_adaptation(user):
+            raise PermissionDenied(
+                "Consent required before AbilityOS can use this profile for barrier detection."
+            )
+
+        try:
+            task_descriptor = get_task_descriptor(task_id)
+        except TaskNotFoundError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            environment_descriptor = EnvironmentAnalyzer.analyze_fixture(environment_id)
+        except EnvironmentNotFoundError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = get_or_create_profile(user)
+        results = BarrierDetectionService.detect(profile.dimensions, task_descriptor, environment_descriptor)
+
+        return Response(
+            {
+                "user_id": user.id,
+                "task_id": task_id,
+                "environment_id": environment_id,
+                "barriers": [r.as_dict() for r in results],
+            }
+        )
 
 
 class RecommendAdaptationsView(APIView):
-    """POST /api/adaptations/recommend/ — {"session_id"}."""
+    """POST /api/adaptations/recommend/
+
+    Two calling conventions on the same endpoint (same dual-mode pattern as
+    Phase 3/4's analyze endpoints):
+    - {"session_id"} — the existing orchestrator-driven flow, persists
+      AdaptationResult rows against a live InteractionSession.
+    - {"user_id", "task_id", "environment_id"} — the Phase 5 Adaptation +
+      AI Decision Engine demo: a standalone, non-persisting call that runs
+      Phase 4 barrier detection then AdaptationRecommender on top of it.
+    """
 
     permission_classes = [AllowAny]
+    throttle_scope = "adaptation_recommend"
 
     def post(self, request):
-        session = get_object_or_404(InteractionSession, pk=request.data.get("session_id"))
-        results = InteractionOrchestrator.recommend_adaptations(session)
-        return Response(
-            {
-                "ai_used": session.ai_used,
-                "results": AdaptationResultSerializer(results, many=True).data,
-            }
+        session_id = request.data.get("session_id")
+        if session_id:
+            session = get_object_or_404(InteractionSession, pk=session_id)
+            assert_owner(request, session.user_id, "You may only access your own session.")
+            results = InteractionOrchestrator.recommend_adaptations(session)
+            return Response(
+                {"ai_used": session.ai_used, "results": AdaptationResultSerializer(results, many=True).data}
+            )
+
+        return self._recommend_standalone(request)
+
+    def _recommend_standalone(self, request):
+        user_id = request.data.get("user_id")
+        task_id = request.data.get("task_id")
+        environment_id = request.data.get("environment_id")
+
+        if not (user_id and task_id and environment_id):
+            return Response(
+                {"detail": "Provide session_id, or all of user_id/task_id/environment_id."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = get_object_or_404(User, pk=user_id)
+        assert_owner(request, user.id, "You may only recommend adaptations for your own profile.")
+
+        if not is_consented_for_adaptation(user):
+            raise PermissionDenied(
+                "Consent required before AbilityOS can recommend an adaptation for this profile."
+            )
+
+        try:
+            task_descriptor = get_task_descriptor(task_id)
+        except TaskNotFoundError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            environment_descriptor = EnvironmentAnalyzer.analyze_fixture(environment_id)
+        except EnvironmentNotFoundError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = get_or_create_profile(user)
+        result = AdaptationRecommender.recommend(
+            profile.dimensions, task_descriptor, environment_descriptor, profile.preferred_modality
         )
+
+        return Response(result)
 
 
 class ApplyAdaptationView(APIView):
@@ -93,8 +282,74 @@ class ApplyAdaptationView(APIView):
 
     def post(self, request, session_id):
         session = get_object_or_404(InteractionSession, pk=session_id)
+        assert_owner(request, session.user_id, "You may only access your own session.")
         payload = InteractionOrchestrator.apply(session, confirmed_ids=request.data.get("confirmed_ids"))
         return Response(payload)
+
+
+class RecordEventsView(APIView):
+    """POST /api/interactions/{id}/events/ — Phase 7 step-level interaction
+    tracking. Accepts either one event object or {"events": [...]}, so the
+    frontend can batch a queue instead of one request per tap (section 29)."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, session_id):
+        session = get_object_or_404(InteractionSession, pk=session_id)
+        assert_owner(request, session.user_id, "You may only access your own session.")
+        payload = request.data.get("events") if "events" in request.data else [request.data]
+        if not isinstance(payload, list) or not payload:
+            return Response({"detail": "Provide an event object or a non-empty 'events' list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            events = InteractionOrchestrator.record_events(session, payload)
+        except OrchestratorError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        session.refresh_from_db()
+        return Response(
+            {
+                "recorded": len(events),
+                "events": InteractionEventSerializer(events, many=True).data,
+                "status": session.status,
+                "assistance_count": session.assistance_count,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CompleteInteractionView(APIView):
+    """POST /api/interactions/{id}/complete/ — Phase 7 explicit lifecycle
+    (section 7/26): marks the session completed with a server-authoritative
+    `completed_at`, ahead of the separate feedback step."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, session_id):
+        session = get_object_or_404(InteractionSession, pk=session_id)
+        assert_owner(request, session.user_id, "You may only access your own session.")
+        try:
+            session = InteractionOrchestrator.complete(session)
+        except OrchestratorError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response(
+            {"status": session.status, "completed_at": session.completed_at, "completion_time_ms": session.completion_time_ms}
+        )
+
+
+class AbandonInteractionView(APIView):
+    """POST /api/interactions/{id}/abandon/ — {"reason"?: "..."}."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request, session_id):
+        session = get_object_or_404(InteractionSession, pk=session_id)
+        assert_owner(request, session.user_id, "You may only access your own session.")
+        try:
+            session = InteractionOrchestrator.abandon(session, reason=request.data.get("reason", ""))
+        except OrchestratorError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
+        return Response({"status": session.status, "completed_at": session.completed_at})
 
 
 class InteractionFeedbackView(APIView):
@@ -104,9 +359,13 @@ class InteractionFeedbackView(APIView):
 
     def post(self, request, session_id):
         session = get_object_or_404(InteractionSession, pk=session_id)
-        feedback = InteractionOrchestrator.record_feedback(session, request.data)
+        assert_owner(request, session.user_id, "You may only submit feedback for your own session.")
+        try:
+            feedback = InteractionOrchestrator.record_feedback(session, request.data)
+        except OrchestratorError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
-            {"status": "recorded", "profile_updated": True, "feedback": FeedbackSerializer(feedback).data}
+            {"status": "recorded", "feedback": FeedbackSerializer(feedback).data}
         )
 
 
@@ -117,4 +376,5 @@ class InteractionSummaryView(APIView):
 
     def get(self, request, session_id):
         session = get_object_or_404(InteractionSession, pk=session_id)
+        assert_owner(request, session.user_id, "You may only access your own session.")
         return Response(InteractionOrchestrator.summary(session))

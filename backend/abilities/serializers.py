@@ -1,9 +1,18 @@
 from rest_framework import serializers
 
-from abilities.models import DIMENSION_KEYS, AbilityProfile
+from abilities.models import AbilityProfile
 
 
 class AbilityProfileSerializer(serializers.ModelSerializer):
+    """Read-shape for the Ability Profile API.
+
+    Validation of incoming writes is not this serializer's job — the view
+    delegates directly to abilities.services.profile_service, which is the
+    single source of truth for the controlled vocabulary (level/confidence/
+    source rules). Keeping validation in one place avoids the two layers
+    silently drifting apart.
+    """
+
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     username = serializers.CharField(source="user.username", read_only=True)
 
@@ -19,14 +28,4 @@ class AbilityProfileSerializer(serializers.ModelSerializer):
             "preferences",
             "updated_at",
         ]
-        read_only_fields = ["id", "user_id", "username", "updated_at"]
-
-    def validate_dimensions(self, value):
-        if not isinstance(value, dict):
-            raise serializers.ValidationError("dimensions must be an object.")
-        for key, val in value.items():
-            if key not in DIMENSION_KEYS:
-                raise serializers.ValidationError(f"Unknown ability dimension '{key}'.")
-            if not isinstance(val, dict) or "level" not in val:
-                raise serializers.ValidationError(f"Dimension '{key}' must include a 'level'.")
-        return value
+        read_only_fields = fields

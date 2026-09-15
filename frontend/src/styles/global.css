@@ -241,6 +241,19 @@ select:focus-visible,
   flex-direction: column;
 }
 
+.app-header__brand--button {
+  align-items: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.app-header__brand--button:hover strong {
+  text-decoration: underline;
+}
+
 .app-header__brand strong {
   font-size: 1.4rem;
   color: var(--color-primary-strong);

@@ -14,6 +14,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from adaptations.models import Adaptation
+from adaptations.services.config import (
+    ACCESSIBILITY_BENEFIT_WEIGHT,
+    CONFIDENCE_WEIGHT,
+    INTERACTION_COST_WEIGHT,
+    RISK_WEIGHT,
+    TASK_RELEVANCE_WEIGHT,
+    USER_PREFERENCE_WEIGHT,
+)
 
 
 @dataclass
@@ -28,13 +36,17 @@ class ScoredCandidate:
     score: float = field(init=False)
 
     def __post_init__(self):
+        # Explicit weights (Phase 5 section 10) — all 1.0 by design; see
+        # adaptations.services.config for why. Multiplying by 1.0 changes
+        # nothing numerically, it just makes the formula's weighting
+        # explicit rather than implicit.
         self.score = round(
-            self.accessibility_benefit
-            + self.task_relevance
-            + self.user_preference
-            + self.confidence
-            - self.interaction_cost
-            - self.risk,
+            self.accessibility_benefit * ACCESSIBILITY_BENEFIT_WEIGHT
+            + self.task_relevance * TASK_RELEVANCE_WEIGHT
+            + self.user_preference * USER_PREFERENCE_WEIGHT
+            + self.confidence * CONFIDENCE_WEIGHT
+            - self.interaction_cost * INTERACTION_COST_WEIGHT
+            - self.risk * RISK_WEIGHT,
             4,
         )
 

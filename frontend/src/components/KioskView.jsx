@@ -84,7 +84,13 @@ export default function KioskView({
   interactive,
   baselineMode,
   onComplete,
+  onAbandon,
+  onEvent,
 }) {
+  // Phase 7 section 8: fires a structured, task-relevant event — never a
+  // no-op if the caller didn't pass onEvent, since the standalone preview
+  // (interactive=false) doesn't track a session at all.
+  const fireEvent = (eventType, detail = {}) => onEvent?.(eventType, detail);
   const [selections, setSelections] = useState({ destination: null, ticketType: null, quantity: 1 });
   const [stepIndex, setStepIndex] = useState(0);
   const [errors, setErrors] = useState(0);
@@ -150,6 +156,7 @@ export default function KioskView({
       setErrors((e) => e + 1);
       setShakingControl(controlId);
       announce("Tap missed — the target was too small. Try again.");
+      fireEvent("validation_error", { controlId, metadata: { reason: "target_too_small" } });
       window.setTimeout(() => setShakingControl(null), 350);
       return;
     }
@@ -159,15 +166,25 @@ export default function KioskView({
 
   const selectDestination = (id) =>
     attemptTap(id, () => {
+      const isReselection = selections.destination !== null && selections.destination !== id;
       setSelections((s) => ({ ...s, destination: id }));
       announce(`${DESTINATIONS.find((d) => d.id === id).label} selected.`);
+      fireEvent(isReselection ? "control_reselected" : "control_selected", {
+        step: "select_destination",
+        controlId: id,
+      });
       if (guided) setStepIndex(1);
     });
 
   const selectTicketType = (id) =>
     attemptTap(id, () => {
+      const isReselection = selections.ticketType !== null && selections.ticketType !== id;
       setSelections((s) => ({ ...s, ticketType: id }));
       announce(`${TICKET_TYPES.find((t) => t.id === id).label} ticket selected.`);
+      fireEvent(isReselection ? "control_reselected" : "control_selected", {
+        step: "select_ticket_type",
+        controlId: id,
+      });
       if (guided) setStepIndex(2);
     });
 
@@ -176,32 +193,37 @@ export default function KioskView({
       setSelections((s) => ({ ...s, quantity: Math.max(1, Math.min(9, s.quantity + delta)) }));
     });
 
+  // Reached only via BUY TICKET, which stays disabled until both a
+  // destination and a ticket type are selected — so a completion the
+  // person actually reaches here is always a genuine success. An
+  // incomplete/abandoned attempt is a distinct path (handleLeaveTask
+  // below), not something this function ever reports.
   const finalizePurchase = () => {
     const elapsedSeconds = startTimeRef.current
       ? Math.max(1, Math.round((performance.now() - startTimeRef.current) / 1000))
       : 1;
-    const completed = Boolean(selections.destination && selections.ticketType);
 
     if (hasBarrier(barriers, "audio_only_alert")) {
-      playTone(completed ? 660 : 220, 260);
+      playTone(660, 260);
       if (!audioUnmirrored) {
-        setBannerAlert(completed ? "success" : "error");
-        if (appliedEffects.haptics) vibrate(completed ? [80] : [120, 60, 120]);
+        setBannerAlert("success");
+        if (appliedEffects.haptics) vibrate([80]);
         window.setTimeout(() => setBannerAlert(null), 2200);
       }
     }
 
     const result = {
-      completed,
+      completed: true,
       errors,
       time_seconds: elapsedSeconds,
       assistance_requested: assistanceRequested,
       effort: Math.min(5, 1 + errors),
-      confidence: completed ? Math.max(1, 5 - errors) : 2,
+      confidence: Math.max(1, 5 - errors),
     };
     setOutcome(result);
+    fireEvent("task_completed");
     if (appliedEffects.voice_prompts || appliedEffects.tts) {
-      speak(completed ? "Purchase complete." : "Purchase could not be completed.");
+      speak("Purchase complete.");
     }
     onComplete(result);
   };
@@ -210,15 +232,48 @@ export default function KioskView({
     attemptTap("buy_ticket", () => {
       if (appliedEffects.confirm_step) {
         setConfirmingPurchase(true);
+        fireEvent("confirmation_opened", { step: "confirm_purchase" });
         return;
       }
       finalizePurchase();
     });
 
+  const confirmPurchase = () => {
+    fireEvent("confirmation_completed", { step: "confirm_purchase" });
+    finalizePurchase();
+  };
+
+  // Phase 7 section 31/47: records the request and lets the person keep
+  // going — it no longer ends the task on its own (that used to conflate
+  // "I need a hand" with "I'm giving up").
   const requestAssistance = () => {
     setAssistanceRequested(true);
     announce("Staff assistance requested.");
-    window.setTimeout(finalizePurchase, 50);
+    fireEvent("assistance_requested");
+  };
+
+  // Phase 7 section 30/46: the one path to an incomplete/abandoned
+  // outcome — distinct from finalizePurchase, which (now that BUY TICKET
+  // requires both selections) always represents a genuine completion.
+  const handleLeaveTask = () => {
+    const elapsedSeconds = startTimeRef.current
+      ? Math.max(1, Math.round((performance.now() - startTimeRef.current) / 1000))
+      : 0;
+    const result = {
+      completed: false,
+      errors,
+      time_seconds: elapsedSeconds,
+      assistance_requested: assistanceRequested,
+      effort: Math.min(5, 1 + errors),
+      confidence: 2,
+    };
+    setOutcome(result);
+    onAbandon?.(result);
+  };
+
+  const handleBack = () => {
+    fireEvent("back_navigation", { step: steps[stepIndex]?.id });
+    setStepIndex((i) => Math.max(0, i - 1));
   };
 
   const canBuy = selections.destination && selections.ticketType;
@@ -228,6 +283,11 @@ export default function KioskView({
     "--spacing-scale": spacingScale,
     "--text-scale": textScale,
   };
+
+  // Phase 6 section 25: a respectful, functional-language indicator — never
+  // medical/diagnostic terminology — shown only when the backend actually
+  // applied something (never a frontend guess).
+  const hasActiveAdaptation = interactive && Object.keys(appliedEffects || {}).length > 0;
 
   return (
     <div
@@ -246,6 +306,12 @@ export default function KioskView({
         </div>
       )}
 
+      {hasActiveAdaptation && (
+        <div className="kiosk__adapted-indicator" role="status">
+          ✓ Interface personalized for easier interaction
+        </div>
+      )}
+
       <header className="kiosk__header">
         <span className="kiosk__brand">CITY TRANSIT</span>
         {guided && (
@@ -254,6 +320,12 @@ export default function KioskView({
           </span>
         )}
       </header>
+
+      {guided && !outcome && stepIndex > 0 && (
+        <button type="button" className="btn btn--ghost kiosk__back" onClick={handleBack} disabled={!interactive}>
+          ← Back
+        </button>
+      )}
 
       {outcome ? (
         <div className="kiosk__result">
@@ -352,7 +424,7 @@ export default function KioskView({
                 <div className="stack">
                   <p>Buy {selections.quantity} ticket(s)? This can't be undone.</p>
                   <div className="row">
-                    <button className="btn btn--primary" onClick={finalizePurchase}>
+                    <button className="btn btn--primary" onClick={confirmPurchase}>
                       Yes, buy
                     </button>
                     <button className="btn btn--ghost" onClick={() => setConfirmingPurchase(false)}>
@@ -377,9 +449,14 @@ export default function KioskView({
 
       {interactive && !outcome && (
         <footer className="kiosk__footer">
-          <button type="button" className="btn btn--ghost" onClick={requestAssistance}>
-            Ask staff for help
-          </button>
+          <div className="row">
+            <button type="button" className="btn btn--ghost" onClick={requestAssistance} disabled={assistanceRequested}>
+              {assistanceRequested ? "Help requested ✓" : "Ask staff for help"}
+            </button>
+            <button type="button" className="btn btn--ghost kiosk__leave" onClick={handleLeaveTask}>
+              Leave without finishing
+            </button>
+          </div>
           <span className="kiosk__error-count" aria-live="polite">
             Errors so far: {errors}
           </span>

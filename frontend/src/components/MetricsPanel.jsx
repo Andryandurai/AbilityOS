@@ -20,6 +20,18 @@ export default function MetricsPanel({ data, loading }) {
 
   const { without_abilityos: before, with_abilityos: after, note } = data;
 
+  // Phase 7 section 15/39: "not enough sessions yet" is a distinct state
+  // from "measured zero" — never render an empty bucket as if 0% were a
+  // real completion rate.
+  if (before.sessions === 0 && after.sessions === 0) {
+    return (
+      <div className="card">
+        <h2>Before / After AbilityOS</h2>
+        <p>Not enough sessions yet.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <h2>Before / After AbilityOS</h2>
@@ -47,6 +59,12 @@ export default function MetricsPanel({ data, loading }) {
             before={before.assistance_rate}
             after={after.assistance_rate}
             format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <MetricRow
+            label="Avg. ease (1-5)"
+            before={before.avg_ease}
+            after={after.avg_ease}
+            betterIsLower={false}
           />
         </tbody>
       </table>
