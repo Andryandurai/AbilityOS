@@ -146,14 +146,20 @@ Click **Explore AbilityOS** to enter the profile journey:
 **Select a demo user → Consent → Ability Profile → Profile Summary → Task &
 Environment → (header nav) Kiosk Demo**
 
-Three seeded personas are available (`python manage.py seed_demo`, password
-`demo-password` for all three if you ever need to log in directly):
+Nine seeded personas are available (`python manage.py seed_demo`, password
+`demo-password` for all nine if you ever need to log in directly):
 
 | Persona | Notable ability values |
 |---|---|
 | Demo User — Low Vision | `vision: large-text-needed`, `dexterity: reduced-precision` |
 | Demo User — Hearing Difficulty | `hearing: relies-on-visual`, `preferred_modality: mixed` |
 | Demo User — Cognitive Load | `cognition: needs-step-by-step`, `fatigue: moderate` |
+| Demo User — Limited Mobility | `reach: seated`, `mobility: limited` |
+| Demo User — Speech Difficulty | `speech: limited` |
+| Demo User — Fatigue / Reduced Stamina | `fatigue: high` |
+| Demo User — Slower Reaction Speed | `reaction_speed: slower` |
+| Demo User — Visual + Hearing Support | `vision: low-contrast-sensitive`, `hearing: relies-on-visual` |
+| Demo User — High Interaction Sensitivity | `interaction_sensitivity: high` |
 
 Pick one, agree to the consent screen, review/edit the Ability Profile form (every
 option shown is a real, validated value — see
@@ -208,7 +214,7 @@ cd backend
 python manage.py test
 ```
 
-237 tests cover Ability Profile validation, task/environment understanding, barrier
+310 tests cover Ability Profile validation, task/environment understanding, barrier
 detection for every barrier type, adaptation scoring/ranking, the safety rule
 engine, AI response validation and fallback behaviour, the adaptive kiosk's
 safe-rendering contract, the full orchestrated workflow via the real REST API, and
@@ -256,7 +262,7 @@ AbilityOS is **not** a medical diagnosis platform and does not behave like one:
 This is a hackathon MVP, not a production system:
 
 - One task (`purchase_ticket`) and one environment fixture are seeded; the barrier/
-  adaptation catalogues cover 5 barrier types and 12 adaptations, not every possible
+  adaptation catalogues cover 10 barrier types and 16 adaptations, not every possible
   accessibility need.
 - Computer-vision environment analysis (OpenCV/OCR) is implemented but optional and
   off by default (`VISION_ENABLED=false`) — the JSON-fixture path is what the demo

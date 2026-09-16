@@ -18,6 +18,9 @@ const KNOWN_UI_EFFECT_KEYS = new Set([
   "haptics",
   "voice_input",
   "confirm_step",
+  "reachable_layout",
+  "touch_text_mode",
+  "extended_timeout_seconds",
 ]);
 
 const BARRIER_LABELS = {
@@ -26,6 +29,11 @@ const BARRIER_LABELS = {
   too_many_choices: "Too many simultaneous choices",
   audio_only_alert: "Audio-only alert",
   fatigue_degraded_precision: "Fatigue-degraded precision",
+  controls_out_of_reach: "Controls outside comfortable reach",
+  voice_only_input: "Voice-only / speech-dependent interaction",
+  excessive_interaction_burden: "Excessive interaction burden",
+  time_limited_interaction: "Time-limited interaction",
+  accidental_activation_risk: "Accidental activation risk",
 };
 
 function RiskPill({ level }) {

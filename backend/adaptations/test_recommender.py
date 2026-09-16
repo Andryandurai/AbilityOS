@@ -395,9 +395,19 @@ class RecommendationAPIIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         candidate_ids = [c["adaptation_id"] for c in response.data["candidates"]]
         self.assertIn("step_by_step_flow", candidate_ids)
+        # Phase 4 (Slower Reaction Speed) finding: the Cognitive Load persona
+        # already had reaction_speed: slower before this phase (unrelated to
+        # cognition), so it now also legitimately produces a
+        # time_limited_interaction barrier against the same environment.
+        # This single-pick endpoint (unlike the live session pipeline, which
+        # applies an adaptation per barrier) reasonably surfaces
+        # increase_interaction_timeout as the single strongest overall
+        # candidate across every barrier -- a real, engine-driven outcome
+        # of this persona's full profile, not a regression in its
+        # choice-related coverage (still present among the candidates).
         self.assertIn(
             response.data["selected_adaptation"]["adaptation_id"],
-            {"step_by_step_flow", "reduce_choice_count", "simplify_navigation"},
+            {"step_by_step_flow", "reduce_choice_count", "simplify_navigation", "increase_interaction_timeout"},
         )
 
     def test_consent_required_before_recommendation(self):

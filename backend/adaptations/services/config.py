@@ -49,4 +49,7 @@ ALLOWED_UI_EFFECT_KEYS = {
     "haptics",
     "voice_input",
     "confirm_step",
+    "reachable_layout",
+    "touch_text_mode",
+    "extended_timeout_seconds",
 }

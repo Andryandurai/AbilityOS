@@ -51,6 +51,49 @@ COGNITION_BASE_SEVERITY = {"prefers-fewer-choices": 0.55, "needs-step-by-step": 
 HEARING_TRIGGER_LEVELS = {"partial", "relies-on-visual"}
 HEARING_BASE_SEVERITY = {"partial": 0.55, "relies-on-visual": 0.8}
 
+# --- Controls outside comfortable reach --------------------------------------------
+# "full" reach never triggers this — a control's position is not inherently
+# a barrier, only a mismatch with a specific profile (same principle as
+# every other rule in this file).
+REACH_TRIGGER_LEVELS = {"limited-upper", "seated"}
+REACH_BASE_SEVERITY = {"limited-upper": 0.55, "seated": 0.8}
+
+# --- Voice-only / speech-dependent interaction ---------------------------------------
+# "typical" speech never triggers this — an environment offering a voice
+# interaction is not inherently a barrier, only a mismatch with a profile
+# that finds speech difficult or unreliable.
+SPEECH_TRIGGER_LEVELS = {"limited", "unavailable"}
+SPEECH_BASE_SEVERITY = {"limited": 0.55, "unavailable": 0.8}
+
+# --- Excessive interaction burden -----------------------------------------------------
+# "fresh" fatigue never triggers this — a multi-step flow is not inherently a
+# barrier, only a mismatch with a profile for whom repeated navigation and
+# re-selection add up over a task (a reduced-stamina profile), same principle
+# as every other rule in this file.
+FATIGUE_TRIGGER_LEVELS = {"moderate", "high"}
+FATIGUE_BASE_SEVERITY = {"moderate": 0.35, "high": 0.7}
+COMFORTABLE_INTERACTION_STEPS = 3
+
+# --- Time-limited interaction -----------------------------------------------------
+# "typical" never triggers this — REQUIRED_RESPONSE_SECONDS["typical"] equals
+# the standard kiosk's own confirmation window (see fixtures), so a typical
+# profile can never be below its own requirement by construction.
+REACTION_TRIGGER_LEVELS = {"slower", "needs-extended-time"}
+REACTION_BASE_SEVERITY = {"slower": 0.5, "needs-extended-time": 0.8}
+REQUIRED_RESPONSE_SECONDS = {
+    "typical": 5,
+    "slower": 10,
+    "needs-extended-time": 15,
+}
+
+# --- Accidental activation risk -----------------------------------------------------
+# "typical" never triggers this -- tight spacing or a lack of confirmation is
+# not inherently a barrier, only a mismatch with a profile that needs more
+# deliberate, less accident-prone interaction.
+INTERACTION_SENSITIVITY_TRIGGER_LEVELS = {"high"}
+INTERACTION_SENSITIVITY_BASE_SEVERITY = {"high": 0.6}
+SAFE_CONTROL_SEPARATION_PX = 32
+
 
 def clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))

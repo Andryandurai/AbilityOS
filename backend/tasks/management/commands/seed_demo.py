@@ -51,7 +51,11 @@ ADAPTATION_CATALOGUE = [
         name="increase_spacing",
         display_name="Increase spacing",
         description="Adds space between controls to reduce accidental adjacent taps.",
-        resolves_barrier_types=["small_tap_targets", "fatigue_degraded_precision"],
+        # Phase 6 (High Interaction Sensitivity) section 9: this adaptation's
+        # own purpose -- more space between controls -- is the direct,
+        # purpose-built remedy for accidental_activation_risk, not just a
+        # side benefit of a dexterity/fatigue fix.
+        resolves_barrier_types=["small_tap_targets", "fatigue_degraded_precision", "accidental_activation_risk"],
         modality="visual",
         accessibility_benefit=0.5,
         interaction_cost=0.10,
@@ -75,7 +79,12 @@ ADAPTATION_CATALOGUE = [
         name="simplify_navigation",
         display_name="Simplify navigation",
         description="Shows fewer visible options at once by restructuring (not removing) the same choices.",
-        resolves_barrier_types=["too_many_choices"],
+        # Phase 3 (Fatigue / Reduced Stamina) section 8: a simplified flow is
+        # also a real, legitimate (if not purpose-built) candidate for
+        # excessive_interaction_burden — added here as a lower-scored
+        # secondary candidate for the scoring engine to compare against the
+        # primary streamline_task_flow adaptation below, not force-applied.
+        resolves_barrier_types=["too_many_choices", "excessive_interaction_burden"],
         modality="visual",
         accessibility_benefit=0.7,
         interaction_cost=0.35,
@@ -99,7 +108,10 @@ ADAPTATION_CATALOGUE = [
         name="step_by_step_flow",
         display_name="Step-by-step guided flow",
         description="Breaks the task into a one-choice-at-a-time sequence with a visible progress indicator.",
-        resolves_barrier_types=["too_many_choices"],
+        # Same reasoning as simplify_navigation above: a guided one-step-at-
+        # a-time flow is a real secondary candidate for excessive_interaction
+        # _burden too (Phase 3 section 8), scored on its own merits.
+        resolves_barrier_types=["too_many_choices", "excessive_interaction_burden"],
         modality="visual",
         accessibility_benefit=0.95,
         interaction_cost=0.40,
@@ -172,13 +184,87 @@ ADAPTATION_CATALOGUE = [
         name="confirmation_before_irreversible_action",
         display_name="Confirm before irreversible action",
         description="Adds a short confirmation step before a purchase is finalised.",
-        resolves_barrier_types=["small_tap_targets", "fatigue_degraded_precision"],
+        # Phase 2 (Speech Difficulty) section 8: a clear visual confirmation
+        # step is also relevant to a voice_only_input mismatch, not just a
+        # dexterity/fatigue one — added here as a legitimate lower-scored
+        # secondary candidate the existing scoring engine can compare
+        # against the primary touch_text_alternative adaptation below,
+        # rather than being force-applied. Phase 4 (Slower Reaction Speed)
+        # section 11: a deliberate "are you sure?" pause is also a real,
+        # if imperfect, secondary candidate for a time-limited interaction
+        # (it doesn't extend the timer, but it does add a deliberate second
+        # look) -- scored on its own merits against the purpose-built
+        # increase_interaction_timeout adaptation below. Phase 6 (High
+        # Interaction Sensitivity) section 12: this adaptation is also the
+        # direct remedy when accidental_activation_risk is caused by a
+        # consequential action lacking confirmation (not just a secondary
+        # candidate there -- for that specific cause it's the purpose-built
+        # fix), scored here on its own merits against increase_spacing.
+        resolves_barrier_types=[
+            "small_tap_targets",
+            "fatigue_degraded_precision",
+            "voice_only_input",
+            "time_limited_interaction",
+            "accidental_activation_risk",
+        ],
         modality="visual",
         accessibility_benefit=0.3,
         interaction_cost=0.20,
         risk=0.05,
         risk_level=Adaptation.RISK_LOW,
         ui_effects={"confirm_step": True},
+    ),
+    dict(
+        name="reachable_control_layout",
+        display_name="Reachable control layout",
+        description="Repositions primary interaction controls into the person's configured "
+        "comfortable reach zone, without changing what the task is.",
+        resolves_barrier_types=["controls_out_of_reach"],
+        modality="visual",
+        accessibility_benefit=0.9,
+        interaction_cost=0.15,
+        risk=0.05,
+        risk_level=Adaptation.RISK_LOW,
+        ui_effects={"reachable_layout": True},
+    ),
+    dict(
+        name="touch_text_alternative",
+        display_name="Touch/text alternative",
+        description="Provides a clear touch/text path for an interaction the kiosk otherwise "
+        "offers or suggests by voice, without changing what the task is.",
+        resolves_barrier_types=["voice_only_input"],
+        modality="visual",
+        accessibility_benefit=0.9,
+        interaction_cost=0.15,
+        risk=0.05,
+        risk_level=Adaptation.RISK_LOW,
+        ui_effects={"touch_text_mode": True},
+    ),
+    dict(
+        name="streamline_task_flow",
+        display_name="Streamline task flow",
+        description="Combines related steps and removes unnecessary navigation transitions to "
+        "reduce repeated interactions, without removing any required task step.",
+        resolves_barrier_types=["excessive_interaction_burden"],
+        modality="visual",
+        accessibility_benefit=0.85,
+        interaction_cost=0.20,
+        risk=0.10,
+        risk_level=Adaptation.RISK_LOW,
+        ui_effects={"flow": "streamlined", "progress_indicator": True},
+    ),
+    dict(
+        name="increase_interaction_timeout",
+        display_name="Increase interaction timeout",
+        description="Provides additional time for the person to understand and respond to a "
+        "time-sensitive confirmation, without changing what the task is.",
+        resolves_barrier_types=["time_limited_interaction"],
+        modality="visual",
+        accessibility_benefit=0.9,
+        interaction_cost=0.10,
+        risk=0.05,
+        risk_level=Adaptation.RISK_LOW,
+        ui_effects={"extended_timeout_seconds": 20},
     ),
 ]
 
@@ -281,6 +367,109 @@ DEMO_PROFILES = [
             "cognition": {"level": "needs-step-by-step", "confidence": 0.78, "source": "manual"},
             "fatigue": {"level": "moderate", "confidence": 0.6, "source": "manual"},
             "reaction_speed": {"level": "slower", "confidence": 0.6, "source": "manual"},
+        },
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
+    ),
+    dict(
+        username="demo_limited_mobility_reach",
+        display_name="Demo User — Limited Mobility",
+        label="Limited Mobility + Reach",
+        dimensions={
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "seated", "confidence": 0.82, "source": "manual"},
+            "mobility": {"level": "limited", "confidence": 0.78, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
+        },
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
+    ),
+    dict(
+        username="demo_speech_difficulty",
+        display_name="Demo User — Speech Difficulty",
+        label="Speech Difficulty",
+        dimensions={
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "limited", "confidence": 0.8, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
+        },
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
+    ),
+    dict(
+        username="demo_fatigue_reduced_stamina",
+        display_name="Demo User — Fatigue / Reduced Stamina",
+        label="Fatigue / Reduced Stamina",
+        dimensions={
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "high", "confidence": 0.8, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
+        },
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
+    ),
+    dict(
+        username="demo_slower_reaction_speed",
+        display_name="Demo User — Slower Reaction Speed",
+        label="Slower Reaction Speed",
+        dimensions={
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "slower", "confidence": 0.8, "source": "manual"},
+        },
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
+    ),
+    dict(
+        username="demo_visual_hearing_support",
+        display_name="Demo User — Visual + Hearing Support",
+        label="Visual + Hearing Support",
+        dimensions={
+            "vision": {"level": "low-contrast-sensitive", "confidence": 0.8, "source": "manual"},
+            "hearing": {"level": "relies-on-visual", "confidence": 0.8, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
+        },
+        preferred_modality=AbilityProfile.MODALITY_VISUAL,
+    ),
+    dict(
+        username="demo_high_interaction_sensitivity",
+        display_name="Demo User — High Interaction Sensitivity",
+        label="High Interaction Sensitivity",
+        dimensions={
+            "vision": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "hearing": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "dexterity": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "reach": {"level": "full", "confidence": 0.5, "source": "manual"},
+            "mobility": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "speech": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "cognition": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "fatigue": {"level": "fresh", "confidence": 0.5, "source": "manual"},
+            "reaction_speed": {"level": "typical", "confidence": 0.5, "source": "manual"},
+            "interaction_sensitivity": {"level": "high", "confidence": 0.8, "source": "manual"},
         },
         preferred_modality=AbilityProfile.MODALITY_VISUAL,
     ),

@@ -100,6 +100,13 @@ export default function KioskView({
   const [confirmingPurchase, setConfirmingPurchase] = useState(false);
   const [outcome, setOutcome] = useState(null);
   const startTimeRef = useRef(null);
+  // Slower Reaction Speed: a real countdown on the confirmation interaction,
+  // not a static "04 seconds" label (section 16) -- remainingSeconds ticks
+  // down via a real setInterval below, and confirmationExpired genuinely
+  // disables BUY TICKET until the person retries.
+  const [remainingSeconds, setRemainingSeconds] = useState(null);
+  const [confirmationExpired, setConfirmationExpired] = useState(false);
+  const [confirmRetryTick, setConfirmRetryTick] = useState(0);
 
   useEffect(() => {
     setSelections({ destination: null, ticketType: null, quantity: 1 });
@@ -107,6 +114,8 @@ export default function KioskView({
     setErrors(0);
     setAssistanceRequested(false);
     setOutcome(null);
+    setRemainingSeconds(null);
+    setConfirmationExpired(false);
     startTimeRef.current = null;
   }, [environment, baselineMode]);
 
@@ -114,22 +123,59 @@ export default function KioskView({
   const missChance = interactive && !appliedEffects.button_scale ? MISS_CHANCE_BY_DEXTERITY[dexterityLevel] || 0 : 0;
 
   const contrastUnresolved = hasBarrier(barriers, "low_contrast") && appliedEffects.contrast !== "high";
-  const guided = Boolean(appliedEffects.flow === "guided" || appliedEffects.flow === "simplified" || appliedEffects.choice_limit);
+  // Fatigue / Reduced Stamina: "streamlined" is its own flow variant, not
+  // just another label for "guided" -- it combines ticket type + quantity
+  // onto one screen (fewer navigation transitions), while "guided" shows
+  // every step one at a time. Both still gate on `guided` for the shared
+  // step-header/back-button chrome below.
+  const streamlined = appliedEffects.flow === "streamlined";
+  const guided = Boolean(
+    appliedEffects.flow === "guided" ||
+      appliedEffects.flow === "simplified" ||
+      streamlined ||
+      appliedEffects.choice_limit
+  );
   const audioUnmirrored = hasBarrier(barriers, "audio_only_alert") && !appliedEffects.banner_alert;
+  // Limited Mobility + Reach: an unresolved controls_out_of_reach barrier
+  // visibly pushes the primary action out toward the edge of the kiosk
+  // (representing it sitting outside the person's comfortable interaction
+  // zone); reachable_layout pulls it back into a labeled "within reach"
+  // zone — a real layout change, not just a banner claiming one happened.
+  const reachUnresolved = hasBarrier(barriers, "controls_out_of_reach") && !appliedEffects.reachable_layout;
+  const reachResolved = hasBarrier(barriers, "controls_out_of_reach") && Boolean(appliedEffects.reachable_layout);
+  // Speech Difficulty: an unresolved voice_only_input barrier shows the
+  // kiosk's real voice prompt above the touch destination grid (touch
+  // still works underneath — this profile isn't blocked, just nudged
+  // toward speech); touch_text_mode removes that prompt and confirms
+  // touch/text is the path, both real rendering changes.
+  const voiceUnresolved = hasBarrier(barriers, "voice_only_input") && !appliedEffects.touch_text_mode;
+  const voiceResolved = hasBarrier(barriers, "voice_only_input") && Boolean(appliedEffects.touch_text_mode);
   const [bannerAlert, setBannerAlert] = useState(null);
 
   const buttonScale = appliedEffects.button_scale || 1;
   const spacingScale = appliedEffects.spacing_scale || 1;
   const textScale = appliedEffects.text_scale || 1;
 
+  // The 4 logical selections (destination, ticket type, quantity, confirm)
+  // are unchanged either way -- `streamlined` only reduces how many
+  // separate navigation screens they're spread across, by putting ticket
+  // type and quantity on the same screen instead of requiring a "Next" tap
+  // between them.
   const steps = useMemo(
-    () => [
-      { id: "select_destination", name: "Where are you going?" },
-      { id: "select_ticket_type", name: "Ticket type" },
-      { id: "select_quantity", name: "Quantity" },
-      { id: "confirm_purchase", name: "Confirm purchase" },
-    ],
-    []
+    () =>
+      streamlined
+        ? [
+            { id: "select_destination", name: "Where are you going?" },
+            { id: "select_ticket_and_quantity", name: "Ticket type & quantity" },
+            { id: "confirm_purchase", name: "Confirm purchase" },
+          ]
+        : [
+            { id: "select_destination", name: "Where are you going?" },
+            { id: "select_ticket_type", name: "Ticket type" },
+            { id: "select_quantity", name: "Quantity" },
+            { id: "confirm_purchase", name: "Confirm purchase" },
+          ],
+    [streamlined]
   );
 
   useEffect(() => {
@@ -138,6 +184,16 @@ export default function KioskView({
       speak(steps[stepIndex].name);
     }
   }, [stepIndex, guided, interactive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Slower Reaction Speed: the confirmation step's real response window --
+  // the environment's own configured fact (kiosk_standard.confirmation_
+  // timeout_seconds), extended only when increase_interaction_timeout was
+  // actually applied. Never hardcoded/faked in the frontend.
+  const confirmStepIndex = streamlined ? 2 : 3;
+  const showingConfirmStep = !guided || stepIndex === confirmStepIndex;
+  const standardTimeoutSeconds = environment?.data?.confirmation_timeout_seconds ?? null;
+  const isExtendedTimeout = Boolean(appliedEffects.extended_timeout_seconds);
+  const effectiveTimeoutSeconds = appliedEffects.extended_timeout_seconds || standardTimeoutSeconds;
 
   const registerStart = () => {
     if (startTimeRef.current === null) startTimeRef.current = performance.now();
@@ -185,7 +241,10 @@ export default function KioskView({
         step: "select_ticket_type",
         controlId: id,
       });
-      if (guided) setStepIndex(2);
+      // Streamlined: quantity lives on this same screen, so picking a
+      // ticket type doesn't navigate anywhere -- that's the reduced
+      // navigation-transition burden this flow is for.
+      if (guided && !streamlined) setStepIndex(2);
     });
 
   const changeQuantity = (delta) =>
@@ -277,6 +336,34 @@ export default function KioskView({
   };
 
   const canBuy = selections.destination && selections.ticketType;
+  const readyToConfirm = interactive && Boolean(canBuy) && !outcome && showingConfirmStep;
+
+  useEffect(() => {
+    if (!readyToConfirm || !effectiveTimeoutSeconds) {
+      setRemainingSeconds(null);
+      return undefined;
+    }
+    setConfirmationExpired(false);
+    setRemainingSeconds(effectiveTimeoutSeconds);
+    const interval = window.setInterval(() => {
+      setRemainingSeconds((s) => (s !== null ? Math.max(0, s - 1) : s));
+    }, 1000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyToConfirm, effectiveTimeoutSeconds, confirmRetryTick]);
+
+  useEffect(() => {
+    if (remainingSeconds === 0 && !confirmationExpired) {
+      setConfirmationExpired(true);
+      fireEvent("interaction_timeout", { step: "confirm_purchase" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds]);
+
+  const retryConfirmation = () => {
+    setConfirmationExpired(false);
+    setConfirmRetryTick((t) => t + 1);
+  };
 
   const kioskStyle = {
     "--button-scale": buttonScale,
@@ -339,7 +426,17 @@ export default function KioskView({
         <div className="kiosk__body">
           {(!guided || stepIndex === 0) && (
             <section aria-labelledby="dest-heading" className="kiosk__section">
-              <h3 id="dest-heading">Where are you going?</h3>
+              <h3 id="dest-heading">{voiceResolved ? "Choose a destination:" : "Where are you going?"}</h3>
+              {voiceUnresolved && (
+                <p className="kiosk__voice-note" role="status">
+                  🎤 This kiosk suggests speaking your destination.
+                </p>
+              )}
+              {voiceResolved && (
+                <p className="kiosk__voice-note kiosk__voice-note--ok" role="status">
+                  ✓ Touch and text selection available — no speech required.
+                </p>
+              )}
               <div className="kiosk__grid">
                 {DESTINATIONS.map((d) => (
                   <button
@@ -362,6 +459,7 @@ export default function KioskView({
           {(!guided || stepIndex === 1) && (
             <section aria-labelledby="ticket-heading" className="kiosk__section">
               <h3 id="ticket-heading">Ticket Type</h3>
+              {streamlined && <p className="kiosk__streamline-hint">Choose a ticket type and quantity below, then confirm.</p>}
               <div className="kiosk__grid">
                 {TICKET_TYPES.map((t) => (
                   <button
@@ -381,7 +479,7 @@ export default function KioskView({
             </section>
           )}
 
-          {(!guided || stepIndex === 2) && (
+          {(!guided || stepIndex === (streamlined ? 1 : 2)) && (
             <section aria-labelledby="qty-heading" className="kiosk__section">
               <h3 id="qty-heading">Quantity</h3>
               <div className="kiosk__quantity">
@@ -408,18 +506,38 @@ export default function KioskView({
                 </button>
               </div>
               {guided && (
-                <button type="button" className="btn btn--ghost" onClick={() => setStepIndex(3)} style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setStepIndex(streamlined ? 2 : 3)}
+                  style={{ marginTop: 12 }}
+                >
                   Next
                 </button>
               )}
             </section>
           )}
 
-          {(!guided || stepIndex === 3) && (
-            <section aria-labelledby="buy-heading" className="kiosk__section kiosk__section--buy">
+          {(!guided || stepIndex === (streamlined ? 2 : 3)) && (
+            <section
+              aria-labelledby="buy-heading"
+              className={`kiosk__section kiosk__section--buy ${
+                reachUnresolved ? "kiosk__section--out-of-reach" : ""
+              } ${reachResolved ? "kiosk__section--in-reach" : ""}`}
+            >
               <h3 id="buy-heading" className="visually-hidden">
                 Confirm purchase
               </h3>
+              {reachUnresolved && (
+                <p className="kiosk__reach-note" role="status">
+                  ⚠ This control is outside the comfortable interaction area.
+                </p>
+              )}
+              {reachResolved && (
+                <p className="kiosk__reach-note kiosk__reach-note--ok" role="status">
+                  ✓ Positioned within the comfortable interaction area.
+                </p>
+              )}
               {confirmingPurchase ? (
                 <div className="stack">
                   <p>Buy {selections.quantity} ticket(s)? This can't be undone.</p>
@@ -432,15 +550,44 @@ export default function KioskView({
                     </button>
                   </div>
                 </div>
+              ) : confirmationExpired ? (
+                <div className="stack">
+                  <p className="kiosk__timeout-message" role="alert">
+                    ⏱ Time expired. Please try again.
+                  </p>
+                  <button type="button" className="btn btn--ghost" onClick={retryConfirmation}>
+                    Try Again
+                  </button>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  disabled={!interactive || !canBuy}
-                  className={`kiosk__btn kiosk__btn--buy ${shakingControl === "buy_ticket" ? "kiosk__btn--shake" : ""}`}
-                  onClick={attemptBuy}
-                >
-                  BUY TICKET
-                </button>
+                <>
+                  {canBuy && (
+                    <p>Your ticket is ready.</p>
+                  )}
+                  {canBuy && effectiveTimeoutSeconds != null && (
+                    <p
+                      className={`kiosk__countdown ${isExtendedTimeout ? "kiosk__countdown--extended" : ""}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {isExtendedTimeout ? "Take your time to review." : `Please confirm within ${effectiveTimeoutSeconds} seconds.`}
+                      {remainingSeconds != null && (
+                        <span className="kiosk__countdown-value">
+                          {" "}
+                          {String(remainingSeconds).padStart(2, "0")} seconds
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!interactive || !canBuy}
+                    className={`kiosk__btn kiosk__btn--buy ${shakingControl === "buy_ticket" ? "kiosk__btn--shake" : ""}`}
+                    onClick={attemptBuy}
+                  >
+                    BUY TICKET
+                  </button>
+                </>
               )}
             </section>
           )}

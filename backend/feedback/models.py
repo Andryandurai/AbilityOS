@@ -211,6 +211,7 @@ class InteractionEvent(models.Model):
     ASSISTANCE_REQUESTED = "assistance_requested"
     TASK_COMPLETED = "task_completed"
     TASK_ABANDONED = "task_abandoned"
+    INTERACTION_TIMEOUT = "interaction_timeout"
 
     EVENT_TYPE_CHOICES = [
         (STEP_STARTED, "Step started"),
@@ -223,11 +224,13 @@ class InteractionEvent(models.Model):
         (ASSISTANCE_REQUESTED, "Assistance requested"),
         (TASK_COMPLETED, "Task completed"),
         (TASK_ABANDONED, "Task abandoned"),
+        (INTERACTION_TIMEOUT, "Interaction timed out"),
     ]
 
     RETRY_EVENT_TYPES = {CONTROL_RESELECTED}
     ERROR_EVENT_TYPES = {VALIDATION_ERROR}
     BACKTRACK_EVENT_TYPES = {BACK_NAVIGATION}
+    TIMEOUT_EVENT_TYPES = {INTERACTION_TIMEOUT}
 
     session = models.ForeignKey(InteractionSession, on_delete=models.CASCADE, related_name="events")
     step = models.CharField(max_length=80, blank=True)

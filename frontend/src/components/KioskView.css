@@ -142,6 +142,84 @@
   padding: calc(10px * var(--button-scale)) calc(24px * var(--button-scale));
 }
 
+/* Limited Mobility + Reach: an unresolved controls_out_of_reach barrier
+   visibly pushes the primary action out to the far edge — a real
+   positional change, not just a label. reachable_layout pulls it back
+   into a clearly-marked "within reach" zone. */
+.kiosk__section--out-of-reach {
+  margin-left: 45%;
+  padding: calc(10px * var(--spacing-scale));
+  border: 2px dashed #d64545;
+  border-radius: 10px;
+  opacity: 0.9;
+}
+
+.kiosk__section--in-reach {
+  margin-left: 0;
+  padding: calc(10px * var(--spacing-scale));
+  border: 2px solid #0f7a6d;
+  border-radius: 10px;
+  background: rgba(15, 122, 109, 0.12);
+}
+
+.kiosk__reach-note {
+  font-size: calc(0.85rem * var(--text-scale));
+  margin-bottom: calc(8px * var(--spacing-scale));
+  color: #ffb4b4;
+}
+
+.kiosk__reach-note--ok {
+  color: #7fe0d1;
+}
+
+/* Speech Difficulty: the same warning/confirmation treatment as
+   .kiosk__reach-note, applied to the voice-prompt note above the
+   destination grid rather than a repositioned section — touch still
+   works underneath either way, only the emphasis/labeling changes. */
+.kiosk__voice-note {
+  font-size: calc(0.85rem * var(--text-scale));
+  margin-bottom: calc(8px * var(--spacing-scale));
+  color: #ffb4b4;
+}
+
+.kiosk__voice-note--ok {
+  color: #7fe0d1;
+}
+
+/* Fatigue / Reduced Stamina: a small informational note on the combined
+   "Ticket Type & Quantity" streamlined screen -- confirms both selections
+   live on this one screen, no separate note-vs-note distinction needed. */
+.kiosk__streamline-hint {
+  font-size: calc(0.85rem * var(--text-scale));
+  margin-bottom: calc(8px * var(--spacing-scale));
+  color: #7fe0d1;
+}
+
+/* Slower Reaction Speed: a real, ticking response-time countdown on the
+   confirmation step -- .kiosk__countdown-value is bold/larger so the
+   standard-vs-extended difference (e.g. "04 seconds" vs "19 seconds") is
+   visually obvious, not just a text change. */
+.kiosk__countdown {
+  font-size: calc(0.9rem * var(--text-scale));
+  margin-bottom: calc(10px * var(--spacing-scale));
+  color: #ffd479;
+}
+
+.kiosk__countdown--extended {
+  color: #7fe0d1;
+}
+
+.kiosk__countdown-value {
+  font-weight: 700;
+  font-size: calc(1.1rem * var(--text-scale));
+}
+
+.kiosk__timeout-message {
+  font-size: calc(1rem * var(--text-scale));
+  font-weight: 600;
+  color: #ffb4b4;
+}
+
 .kiosk__btn:disabled {
   opacity: 0.5;
 }

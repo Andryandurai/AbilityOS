@@ -169,8 +169,21 @@ class InteractionOrchestrator:
                 result.save(update_fields=["confirmed", "applied"])
                 applied_results.append(result)
 
+        # Phase 3 (Fatigue / Reduced Stamina) finding: with enough barriers
+        # able to co-fire for one profile (e.g. Cognitive Load's pre-existing
+        # too_many_choices now also legitimately co-firing
+        # excessive_interaction_burden, since it already has fatigue:
+        # moderate), two applied adaptations can set the *same* ui_effects
+        # key to different values (e.g. "flow": "guided" vs "streamlined").
+        # Merging in ascending barrier-severity order — so the
+        # highest-severity barrier's adaptation is applied last and wins any
+        # conflicting key — keeps the rendered interface consistent with the
+        # "primary barrier" every other part of the app already uses
+        # (barriers.sort(..., reverse=True), DeveloperPanel's glance strip).
+        # A no-op for every pre-existing profile, since no two of their
+        # simultaneously-applied adaptations ever shared a ui_effects key.
         merged_effects: dict = {}
-        for result in applied_results:
+        for result in sorted(applied_results, key=lambda r: r.barrier.severity):
             merged_effects.update(result.adaptation.ui_effects)
 
         session.status = InteractionSession.STATUS_ADAPTED

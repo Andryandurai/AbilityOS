@@ -6,6 +6,7 @@ See docs/ARCHITECTURE.md for the system design this configuration supports.
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -14,6 +15,17 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
+
+# `manage.py test` runs the whole suite in one process against Django's
+# default in-memory cache — unlike the database, that cache is NOT reset
+# between TestCase classes, so a real per-IP request throttle (see
+# REST_FRAMEWORK below) accumulates across the entire run and can trip
+# itself on nothing but normal test volume, not a real abuse pattern. Only
+# the throttle *rate* is relaxed for a test run; the mechanism itself
+# still runs unmodified (a dedicated test can still assert it fires with
+# `@override_settings`), and production is entirely unaffected since this
+# is never true outside `manage.py test`.
+TESTING = "test" in sys.argv
 
 
 def env_bool(name, default=False):
@@ -144,11 +156,11 @@ REST_FRAMEWORK = {
     # in via `throttle_scope` (see api/views.py, users/views.py) — every
     # other endpoint is unaffected by adding this globally.
     "DEFAULT_THROTTLE_CLASSES": ("rest_framework.throttling.ScopedRateThrottle",),
-    "DEFAULT_THROTTLE_RATES": {
-        "auth_login": "10/min",
-        "session_start": "30/min",
-        "adaptation_recommend": "30/min",
-    },
+    "DEFAULT_THROTTLE_RATES": (
+        {"auth_login": "10000/min", "session_start": "10000/min", "adaptation_recommend": "10000/min"}
+        if TESTING
+        else {"auth_login": "10/min", "session_start": "30/min", "adaptation_recommend": "30/min"}
+    ),
 }
 
 CORS_ALLOWED_ORIGINS = [

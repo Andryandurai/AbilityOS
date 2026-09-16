@@ -17,14 +17,27 @@ from abc import ABC, abstractmethod
 from barriers.services.config import (
     COGNITION_BASE_SEVERITY,
     COGNITION_TRIGGER_LEVELS,
+    COMFORTABLE_INTERACTION_STEPS,
     DEXTERITY_BASE_SEVERITY,
     DEXTERITY_TRIGGER_LEVELS,
+    FATIGUE_BASE_SEVERITY,
+    FATIGUE_TRIGGER_LEVELS,
     HEARING_BASE_SEVERITY,
     HEARING_TRIGGER_LEVELS,
+    INTERACTION_SENSITIVITY_BASE_SEVERITY,
+    INTERACTION_SENSITIVITY_TRIGGER_LEVELS,
     MAX_SIMULTANEOUS_CHOICES,
     MIN_CONTRAST_RATIO,
     MIN_TAP_TARGET_HEIGHT,
     MIN_TAP_TARGET_WIDTH,
+    REACH_BASE_SEVERITY,
+    REACH_TRIGGER_LEVELS,
+    REACTION_BASE_SEVERITY,
+    REACTION_TRIGGER_LEVELS,
+    REQUIRED_RESPONSE_SECONDS,
+    SAFE_CONTROL_SEPARATION_PX,
+    SPEECH_BASE_SEVERITY,
+    SPEECH_TRIGGER_LEVELS,
     VISION_CONTRAST_TRIGGER_LEVELS,
     clamp,
 )
@@ -278,18 +291,260 @@ class AudioOnlyAlertRule(BarrierRule):
         ]
 
 
+class ControlsOutOfReachRule(BarrierRule):
+    barrier_type = "controls_out_of_reach"
+    ability_dimension = "reach"
+
+    def detect(self, ability_profile, task, environment):
+        reach = _dimension(ability_profile, "reach")
+        level = reach.get("level")
+        if level not in REACH_TRIGGER_LEVELS:
+            return []
+
+        zone = environment.get("interaction_zone")
+        if not zone:
+            return []
+
+        controls = _task_relevant_controls(task, environment)
+        positioned = [c for c in controls if c.get("x") is not None and c.get("y") is not None]
+        if not positioned:
+            return []
+
+        zx, zy = zone.get("x", 0), zone.get("y", 0)
+        zw, zh = zone.get("width", 0), zone.get("height", 0)
+
+        def outside(c):
+            return not (zx <= c["x"] <= zx + zw and zy <= c["y"] <= zy + zh)
+
+        out_of_reach = [c for c in positioned if outside(c)]
+        if not out_of_reach:
+            return []
+
+        base = REACH_BASE_SEVERITY.get(level, 0.5)
+        severity = clamp(base)
+
+        return [
+            BarrierResult(
+                barrier_type=self.barrier_type,
+                ability_dimension=self.ability_dimension,
+                severity=severity,
+                confidence=reach.get("confidence", 0.5),
+                title="Controls outside comfortable reach",
+                description=(
+                    "One or more interaction controls are positioned outside the configured "
+                    f"comfortable interaction zone for a '{level}' reach profile."
+                ),
+                evidence={
+                    "controls": [{"id": c.get("id"), "x": c.get("x"), "y": c.get("y")} for c in out_of_reach],
+                    "interaction_zone": zone,
+                    "ability_value": level,
+                },
+            )
+        ]
+
+
+class VoiceOnlyInputRule(BarrierRule):
+    barrier_type = "voice_only_input"
+    ability_dimension = "speech"
+
+    def detect(self, ability_profile, task, environment):
+        speech = _dimension(ability_profile, "speech")
+        level = speech.get("level")
+        if level not in SPEECH_TRIGGER_LEVELS:
+            return []
+
+        controls = environment.get("controls") or []
+        voice_controls = [c for c in controls if c.get("interaction_type") == "voice"]
+        if not voice_controls:
+            return []
+
+        base = SPEECH_BASE_SEVERITY.get(level, 0.5)
+        severity = clamp(base)
+        control = voice_controls[0]
+
+        return [
+            BarrierResult(
+                barrier_type=self.barrier_type,
+                ability_dimension=self.ability_dimension,
+                severity=severity,
+                confidence=speech.get("confidence", 0.5),
+                title="Voice-only / speech-dependent interaction",
+                description=(
+                    "Speech-based interaction is offered or required for this interaction, while the "
+                    f"selected profile prefers non-speech input, for a '{level}' speech profile."
+                ),
+                evidence={
+                    "controls": [{"id": c.get("id"), "label": c.get("label")} for c in voice_controls],
+                    "ability_value": level,
+                },
+            )
+        ]
+
+
+class ExcessiveInteractionBurdenRule(BarrierRule):
+    barrier_type = "excessive_interaction_burden"
+    ability_dimension = "fatigue"
+
+    def detect(self, ability_profile, task, environment):
+        fatigue = _dimension(ability_profile, "fatigue")
+        level = fatigue.get("level")
+        if level not in FATIGUE_TRIGGER_LEVELS:
+            return []
+
+        step_count = environment.get("interaction_step_count")
+        if step_count is None:
+            # No explicit environment fact — fall back to the task's own
+            # real step count rather than inventing a number (same
+            # fallback shape TooManyChoicesRule uses above).
+            step_count = len(task.get("steps") or [])
+        if not step_count or step_count <= COMFORTABLE_INTERACTION_STEPS:
+            return []
+
+        excess_ratio = clamp((step_count - COMFORTABLE_INTERACTION_STEPS) / COMFORTABLE_INTERACTION_STEPS)
+        base = FATIGUE_BASE_SEVERITY.get(level, 0.5)
+        severity = clamp(base + excess_ratio * (1 - base) * 0.6)
+
+        controls = _task_relevant_controls(task, environment)
+        repeated_controls = [c for c in controls if c.get("repeated_action")]
+
+        return [
+            BarrierResult(
+                barrier_type=self.barrier_type,
+                ability_dimension=self.ability_dimension,
+                severity=severity,
+                confidence=fatigue.get("confidence", 0.5),
+                title="Excessive interaction burden",
+                description=(
+                    f"This task currently requires {step_count} interaction steps/screens "
+                    f"(comfortable limit {COMFORTABLE_INTERACTION_STEPS}), adding navigation "
+                    f"transitions and repeated interactions for a '{level}' fatigue/stamina profile."
+                ),
+                evidence={
+                    "step_count": step_count,
+                    "threshold": COMFORTABLE_INTERACTION_STEPS,
+                    "repeated_action_controls": [
+                        {"id": c.get("id"), "label": c.get("label")} for c in repeated_controls
+                    ],
+                    "ability_value": level,
+                },
+            )
+        ]
+
+
+class TimeLimitedInteractionRule(BarrierRule):
+    barrier_type = "time_limited_interaction"
+    ability_dimension = "reaction_speed"
+
+    def detect(self, ability_profile, task, environment):
+        reaction_speed = _dimension(ability_profile, "reaction_speed")
+        level = reaction_speed.get("level")
+        if level not in REACTION_TRIGGER_LEVELS:
+            return []
+
+        actual_timeout = environment.get("confirmation_timeout_seconds")
+        if actual_timeout is None:
+            return []
+
+        required = REQUIRED_RESPONSE_SECONDS.get(level, REQUIRED_RESPONSE_SECONDS["typical"])
+        if actual_timeout >= required:
+            return []
+
+        shortfall = clamp((required - actual_timeout) / required)
+        base = REACTION_BASE_SEVERITY.get(level, 0.5)
+        severity = clamp(base + shortfall * (1 - base) * 0.6)
+
+        return [
+            BarrierResult(
+                barrier_type=self.barrier_type,
+                ability_dimension=self.ability_dimension,
+                severity=severity,
+                confidence=reaction_speed.get("confidence", 0.5),
+                title="Time-limited interaction",
+                description=(
+                    f"The confirmation interaction allows only {actual_timeout} seconds for a response, "
+                    f"below the {required}-second response-time requirement for a '{level}' reaction-speed "
+                    "profile."
+                ),
+                evidence={
+                    "actual_timeout_seconds": actual_timeout,
+                    "required_seconds": required,
+                    "ability_value": level,
+                },
+            )
+        ]
+
+
+class AccidentalActivationRiskRule(BarrierRule):
+    barrier_type = "accidental_activation_risk"
+    ability_dimension = "interaction_sensitivity"
+
+    def detect(self, ability_profile, task, environment):
+        sensitivity = _dimension(ability_profile, "interaction_sensitivity")
+        level = sensitivity.get("level")
+        if level not in INTERACTION_SENSITIVITY_TRIGGER_LEVELS:
+            return []
+
+        spacing = environment.get("min_control_spacing_px")
+        crowded = spacing is not None and spacing < SAFE_CONTROL_SEPARATION_PX
+        unconfirmed = not environment.get("confirmation_available", False)
+        if not crowded and not unconfirmed:
+            return []
+
+        causes = int(crowded) + int(unconfirmed)
+        base = INTERACTION_SENSITIVITY_BASE_SEVERITY.get(level, 0.5)
+        severity = clamp(base + 0.15 * (causes - 1))
+
+        reasons = []
+        if crowded:
+            reasons.append(
+                f"adjacent controls are only {spacing}px apart, below the "
+                f"{SAFE_CONTROL_SEPARATION_PX}px comfortable separation"
+            )
+        if unconfirmed:
+            reasons.append("the consequential action completes on a single tap with no confirmation step")
+
+        return [
+            BarrierResult(
+                barrier_type=self.barrier_type,
+                ability_dimension=self.ability_dimension,
+                severity=severity,
+                confidence=sensitivity.get("confidence", 0.5),
+                title="Accidental activation risk",
+                description=(
+                    f"This interaction is more likely to result in an accidental or unintended action than "
+                    f"is comfortable for a '{level}' interaction-sensitivity profile: " + " and ".join(reasons) + "."
+                ),
+                evidence={
+                    "min_control_spacing_px": spacing,
+                    "safe_separation_px": SAFE_CONTROL_SEPARATION_PX,
+                    "confirmation_available": environment.get("confirmation_available", False),
+                    "ability_value": level,
+                },
+            )
+        ]
+
+
 BARRIER_RULES: list[BarrierRule] = [
     SmallTapTargetRule(),
     LowContrastTextRule(),
     TooManyChoicesRule(),
     AudioOnlyAlertRule(),
+    ControlsOutOfReachRule(),
+    VoiceOnlyInputRule(),
+    ExcessiveInteractionBurdenRule(),
+    TimeLimitedInteractionRule(),
+    AccidentalActivationRiskRule(),
 ]
 
-# fatigue_related_load (Phase 4 spec section 13) is deliberately NOT
-# implemented: it requires a live fatigue *signal* distinct from the stored
-# baseline profile (e.g. rising error rate during a session), and Phase 4
-# has no such session-derived signal available to this standalone,
-# session-independent engine. Implementing it against the static baseline
-# profile alone would just be a restatement of the dexterity/cognition
-# rules under a different name, not a real fatigue-tracking rule. Deferred
-# until a real signal exists — see docs/PHASE_4.md.
+# fatigue_related_load (Phase 4 spec section 13) is still deliberately NOT
+# implemented: it would need a live fatigue *signal* distinct from the
+# stored baseline profile (e.g. rising error rate during a session), which
+# this standalone, session-independent engine has no access to. That is a
+# different concept from ExcessiveInteractionBurdenRule above:
+# fatigue_related_load would restate dexterity/cognition against the same
+# static baseline under a different name, whereas
+# ExcessiveInteractionBurdenRule checks a fact neither of those rules
+# looks at (how many discrete interaction steps the flow requires) — a
+# genuine, separate mismatch, not a forced reuse. fatigue_related_load
+# itself stays deferred until a real session-derived signal exists — see
+# docs/PHASE_4.md.

@@ -7,19 +7,25 @@
     "height": 800
   },
   "controls": [
-    { "id": "dest_central_station", "type": "button", "label": "Central Station", "width": 150, "height": 40, "primary": false },
-    { "id": "dest_airport", "type": "button", "label": "Airport", "width": 150, "height": 40, "primary": false },
-    { "id": "dest_hospital", "type": "button", "label": "Hospital", "width": 150, "height": 40, "primary": false },
-    { "id": "dest_university", "type": "button", "label": "University", "width": 150, "height": 40, "primary": false },
-    { "id": "ticket_single", "type": "button", "label": "Single", "width": 120, "height": 36, "primary": false },
-    { "id": "ticket_return", "type": "button", "label": "Return", "width": 120, "height": 36, "primary": false },
-    { "id": "quantity_minus", "type": "button", "label": "-", "width": 32, "height": 32, "primary": false },
-    { "id": "quantity_plus", "type": "button", "label": "+", "width": 32, "height": 32, "primary": false },
-    { "id": "buy_ticket", "type": "button", "label": "BUY TICKET", "width": 120, "height": 40, "primary": true }
+    { "id": "dest_central_station", "type": "button", "label": "Central Station", "width": 150, "height": 40, "primary": false, "x": 80, "y": 460 },
+    { "id": "dest_airport", "type": "button", "label": "Airport", "width": 150, "height": 40, "primary": false, "x": 260, "y": 460 },
+    { "id": "dest_hospital", "type": "button", "label": "Hospital", "width": 150, "height": 40, "primary": false, "x": 80, "y": 520 },
+    { "id": "dest_university", "type": "button", "label": "University", "width": 150, "height": 40, "primary": false, "x": 260, "y": 520 },
+    { "id": "ticket_single", "type": "button", "label": "Single", "width": 120, "height": 36, "primary": false, "x": 80, "y": 590 },
+    { "id": "ticket_return", "type": "button", "label": "Return", "width": 120, "height": 36, "primary": false, "x": 220, "y": 590 },
+    { "id": "quantity_minus", "type": "button", "label": "-", "width": 32, "height": 32, "primary": false, "x": 80, "y": 650, "repeated_action": true },
+    { "id": "quantity_plus", "type": "button", "label": "+", "width": 32, "height": 32, "primary": false, "x": 140, "y": 650, "repeated_action": true },
+    { "id": "buy_ticket", "type": "button", "label": "BUY TICKET", "width": 120, "height": 40, "primary": true, "x": 1100, "y": 60 },
+    { "id": "voice_destination", "type": "voice_prompt", "label": "Speak your destination", "interaction_type": "voice", "width": 140, "height": 40, "primary": false, "x": 80, "y": 400 }
   ],
   "contrast": 0.52,
   "visible_choice_count": 8,
   "audio_alert": true,
   "visual_alert_mirror": false,
-  "noise_level": "moderate"
+  "noise_level": "moderate",
+  "interaction_zone": { "x": 40, "y": 420, "width": 500, "height": 300 },
+  "interaction_step_count": 4,
+  "confirmation_timeout_seconds": 5,
+  "min_control_spacing_px": 20,
+  "confirmation_available": false
 }

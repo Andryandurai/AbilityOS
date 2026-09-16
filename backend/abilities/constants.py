@@ -18,6 +18,7 @@ DIMENSION_KEYS = [
     "cognition",
     "fatigue",
     "reaction_speed",
+    "interaction_sensitivity",
 ]
 
 # Controlled values per dimension — never arbitrary free text (Phase 2 spec
@@ -33,6 +34,11 @@ ALLOWED_LEVELS = {
     "cognition": ["typical", "prefers-fewer-choices", "needs-step-by-step"],
     "fatigue": ["fresh", "moderate", "high"],
     "reaction_speed": ["typical", "slower", "needs-extended-time"],
+    # Deliberately a 2-value vocabulary (not the usual 3-tier shape) -- this
+    # profile is functional/binary ("benefits from more deliberate, less
+    # accident-prone interaction" or not), not a severity scale. No
+    # diagnostic or clinical categories.
+    "interaction_sensitivity": ["typical", "high"],
 }
 
 DEFAULT_LEVEL = {key: values[0] for key, values in ALLOWED_LEVELS.items()}

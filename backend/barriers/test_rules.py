@@ -13,10 +13,15 @@ from rest_framework.test import APIClient
 from abilities.models import default_dimensions
 from barriers.services.detector import BarrierDetectionService
 from barriers.services.rules import (
+    AccidentalActivationRiskRule,
     AudioOnlyAlertRule,
+    ControlsOutOfReachRule,
+    ExcessiveInteractionBurdenRule,
     LowContrastTextRule,
     SmallTapTargetRule,
+    TimeLimitedInteractionRule,
     TooManyChoicesRule,
+    VoiceOnlyInputRule,
     _contrast_ratio,
 )
 
@@ -206,6 +211,219 @@ class AudioOnlyAlertRuleTests(TestCase):
 
 
 # --------------------------------------------------------------------------
+# Rule 5: controls_out_of_reach (Limited Mobility + Reach)
+# --------------------------------------------------------------------------
+class ControlsOutOfReachRuleTests(TestCase):
+    def setUp(self):
+        self.rule = ControlsOutOfReachRule()
+        self.zone = {"x": 0, "y": 0, "width": 100, "height": 100}
+        self.in_zone_env = {
+            "interaction_zone": self.zone,
+            "controls": [{"id": "confirm_button", "x": 50, "y": 50}, {"id": "other_button", "x": 60, "y": 60}],
+        }
+        self.out_of_zone_env = {
+            "interaction_zone": self.zone,
+            "controls": [{"id": "confirm_button", "x": 500, "y": 500}, {"id": "other_button", "x": 500, "y": 500}],
+        }
+
+    def test_seated_reach_with_control_outside_zone_detects_barrier(self):
+        results = self.rule.detect(dims_with(reach="seated"), TASK, self.out_of_zone_env)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].barrier_type, "controls_out_of_reach")
+        self.assertEqual(results[0].ability_dimension, "reach")
+
+    def test_limited_upper_reach_with_control_outside_zone_detects_barrier(self):
+        results = self.rule.detect(dims_with(reach="limited-upper"), TASK, self.out_of_zone_env)
+        self.assertEqual(len(results), 1)
+
+    def test_typical_reach_with_same_environment_detects_nothing(self):
+        results = self.rule.detect(default_dimensions(), TASK, self.out_of_zone_env)
+        self.assertEqual(results, [])
+
+    def test_control_already_within_zone_detects_nothing(self):
+        results = self.rule.detect(dims_with(reach="seated"), TASK, self.in_zone_env)
+        self.assertEqual(results, [])
+
+    def test_no_interaction_zone_configured_detects_nothing(self):
+        results = self.rule.detect(dims_with(reach="seated"), TASK, {"controls": self.out_of_zone_env["controls"]})
+        self.assertEqual(results, [])
+
+
+# --------------------------------------------------------------------------
+# Rule 6: voice_only_input (Speech Difficulty)
+# --------------------------------------------------------------------------
+class VoiceOnlyInputRuleTests(TestCase):
+    def setUp(self):
+        self.rule = VoiceOnlyInputRule()
+        self.voice_env = {
+            "controls": [{"id": "confirm_button", "interaction_type": "voice", "label": "Speak your destination"}]
+        }
+        self.no_voice_env = {"controls": [{"id": "confirm_button", "type": "button"}]}
+
+    def test_limited_speech_with_voice_control_detects_barrier(self):
+        results = self.rule.detect(dims_with(speech="limited"), TASK, self.voice_env)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].barrier_type, "voice_only_input")
+        self.assertEqual(results[0].ability_dimension, "speech")
+
+    def test_unavailable_speech_with_voice_control_detects_barrier(self):
+        results = self.rule.detect(dims_with(speech="unavailable"), TASK, self.voice_env)
+        self.assertEqual(len(results), 1)
+
+    def test_typical_speech_with_same_environment_detects_nothing(self):
+        """Negative case (section 21): a genuine mismatch check, not
+        `if profile == speech_difficulty`."""
+        results = self.rule.detect(default_dimensions(), TASK, self.voice_env)
+        self.assertEqual(results, [])
+
+    def test_no_voice_control_detects_nothing(self):
+        results = self.rule.detect(dims_with(speech="limited"), TASK, self.no_voice_env)
+        self.assertEqual(results, [])
+
+
+# --------------------------------------------------------------------------
+# Rule 7: excessive_interaction_burden (Fatigue / Reduced Stamina)
+# --------------------------------------------------------------------------
+class ExcessiveInteractionBurdenRuleTests(TestCase):
+    def setUp(self):
+        self.rule = ExcessiveInteractionBurdenRule()
+        self.multi_step_env = {"interaction_step_count": 4}
+        self.short_env = {"interaction_step_count": 3}
+        self.task_with_steps = {
+            **TASK,
+            "steps": [{"id": "s1"}, {"id": "s2"}, {"id": "s3"}, {"id": "s4"}],
+        }
+
+    def test_high_fatigue_with_multi_step_flow_detects_barrier(self):
+        results = self.rule.detect(dims_with(fatigue="high"), TASK, self.multi_step_env)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].barrier_type, "excessive_interaction_burden")
+        self.assertEqual(results[0].ability_dimension, "fatigue")
+
+    def test_moderate_fatigue_with_multi_step_flow_detects_barrier(self):
+        results = self.rule.detect(dims_with(fatigue="moderate"), TASK, self.multi_step_env)
+        self.assertEqual(len(results), 1)
+
+    def test_fresh_fatigue_with_same_environment_detects_nothing(self):
+        """Negative case: a genuine mismatch check, not
+        `if profile == fatigue_reduced_stamina`."""
+        results = self.rule.detect(default_dimensions(), TASK, self.multi_step_env)
+        self.assertEqual(results, [])
+
+    def test_comfortable_step_count_detects_nothing(self):
+        results = self.rule.detect(dims_with(fatigue="high"), TASK, self.short_env)
+        self.assertEqual(results, [])
+
+    def test_falls_back_to_task_step_count_when_environment_omits_it(self):
+        results = self.rule.detect(dims_with(fatigue="high"), self.task_with_steps, {})
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].evidence["step_count"], 4)
+
+    def test_evidence_contains_step_count_and_threshold(self):
+        results = self.rule.detect(dims_with(fatigue="high"), TASK, self.multi_step_env)
+        evidence = results[0].evidence
+        self.assertEqual(evidence["step_count"], 4)
+        self.assertEqual(evidence["threshold"], 3)
+
+    def test_evidence_lists_repeated_action_controls_when_present(self):
+        env = {
+            "interaction_step_count": 4,
+            "controls": [
+                {"id": "quantity_minus", "label": "-", "repeated_action": True},
+                {"id": "quantity_plus", "label": "+", "repeated_action": True},
+                {"id": "buy_ticket", "label": "BUY TICKET"},
+            ],
+        }
+        task = {**TASK, "controls": env["controls"]}
+        results = self.rule.detect(dims_with(fatigue="high"), task, env)
+        repeated_ids = [c["id"] for c in results[0].evidence["repeated_action_controls"]]
+        self.assertEqual(sorted(repeated_ids), ["quantity_minus", "quantity_plus"])
+
+
+# --------------------------------------------------------------------------
+# Rule 8: time_limited_interaction (Slower Reaction Speed)
+# --------------------------------------------------------------------------
+class TimeLimitedInteractionRuleTests(TestCase):
+    def setUp(self):
+        self.rule = TimeLimitedInteractionRule()
+        self.short_env = {"confirmation_timeout_seconds": 5}
+        self.generous_env = {"confirmation_timeout_seconds": 30}
+        self.exact_env = {"confirmation_timeout_seconds": 10}
+
+    def test_case1_typical_with_short_timeout_detects_nothing(self):
+        results = self.rule.detect(default_dimensions(), TASK, self.short_env)
+        self.assertEqual(results, [])
+
+    def test_case2_slower_with_short_timeout_detects_barrier(self):
+        results = self.rule.detect(dims_with(reaction_speed="slower"), TASK, self.short_env)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].barrier_type, "time_limited_interaction")
+        self.assertEqual(results[0].ability_dimension, "reaction_speed")
+
+    def test_needs_extended_time_with_short_timeout_detects_barrier(self):
+        results = self.rule.detect(dims_with(reaction_speed="needs-extended-time"), TASK, self.short_env)
+        self.assertEqual(len(results), 1)
+
+    def test_case3_slower_with_generous_timeout_detects_nothing(self):
+        results = self.rule.detect(dims_with(reaction_speed="slower"), TASK, self.generous_env)
+        self.assertEqual(results, [])
+
+    def test_case4_requirement_exactly_met_detects_nothing(self):
+        results = self.rule.detect(dims_with(reaction_speed="slower"), TASK, self.exact_env)
+        self.assertEqual(results, [])
+
+    def test_no_timeout_fact_configured_detects_nothing(self):
+        results = self.rule.detect(dims_with(reaction_speed="slower"), TASK, {})
+        self.assertEqual(results, [])
+
+    def test_evidence_contains_actual_and_required_seconds(self):
+        results = self.rule.detect(dims_with(reaction_speed="slower"), TASK, self.short_env)
+        evidence = results[0].evidence
+        self.assertEqual(evidence["actual_timeout_seconds"], 5)
+        self.assertEqual(evidence["required_seconds"], 10)
+
+
+# --------------------------------------------------------------------------
+# Rule 9: accidental_activation_risk (High Interaction Sensitivity)
+# --------------------------------------------------------------------------
+class AccidentalActivationRiskRuleTests(TestCase):
+    def setUp(self):
+        self.rule = AccidentalActivationRiskRule()
+        self.crowded_confirmed_env = {"min_control_spacing_px": 20, "confirmation_available": True}
+        self.roomy_unconfirmed_env = {"min_control_spacing_px": 50, "confirmation_available": False}
+        self.roomy_confirmed_env = {"min_control_spacing_px": 50, "confirmation_available": True}
+
+    def test_case1_crowded_controls_with_confirmation_detects_barrier(self):
+        results = self.rule.detect(dims_with(interaction_sensitivity="high"), TASK, self.crowded_confirmed_env)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].barrier_type, "accidental_activation_risk")
+        self.assertEqual(results[0].ability_dimension, "interaction_sensitivity")
+
+    def test_case2_missing_confirmation_alone_detects_barrier(self):
+        results = self.rule.detect(dims_with(interaction_sensitivity="high"), TASK, self.roomy_unconfirmed_env)
+        self.assertEqual(len(results), 1)
+
+    def test_case3_well_separated_and_confirmed_detects_nothing(self):
+        results = self.rule.detect(dims_with(interaction_sensitivity="high"), TASK, self.roomy_confirmed_env)
+        self.assertEqual(results, [])
+
+    def test_case4_typical_sensitivity_with_crowded_env_detects_nothing(self):
+        results = self.rule.detect(default_dimensions(), TASK, self.crowded_confirmed_env)
+        self.assertEqual(results, [])
+
+    def test_both_causes_present_scores_higher_than_single_cause(self):
+        both = self.rule.detect(dims_with(interaction_sensitivity="high"), TASK, {"min_control_spacing_px": 10, "confirmation_available": False})
+        single = self.rule.detect(dims_with(interaction_sensitivity="high"), TASK, self.roomy_unconfirmed_env)
+        self.assertGreater(both[0].severity, single[0].severity)
+
+    def test_evidence_contains_spacing_and_confirmation_facts(self):
+        results = self.rule.detect(dims_with(interaction_sensitivity="high"), TASK, self.crowded_confirmed_env)
+        evidence = results[0].evidence
+        self.assertEqual(evidence["min_control_spacing_px"], 20)
+        self.assertEqual(evidence["confirmation_available"], True)
+
+
+# --------------------------------------------------------------------------
 # BarrierDetectionService — dedup, sort, no barriers, profile/task dependency
 # --------------------------------------------------------------------------
 class BarrierDetectionServiceTests(TestCase):
@@ -350,6 +568,15 @@ class RegressionTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         call_command("seed_demo")
+        # Looked up by username rather than hardcoded as id=1: with enough
+        # User-creating tests across the full suite, SQLite's shared
+        # in-memory autoincrement counter (`cache=shared`) does not reset
+        # per TestCase class the way a hardcoded id=1 assumed — a real,
+        # pre-existing fragility this phase's 5th seeded profile tipped
+        # over, not something specific to barrier detection.
+        from users.models import User
+
+        cls.demo_user_id = User.objects.get(username="demo_low_vision_dexterity").id
 
     def setUp(self):
         self.client = APIClient()
@@ -358,10 +585,10 @@ class RegressionTests(TestCase):
         self.assertEqual(self.client.get("/api/health/").status_code, 200)
 
     def test_ability_profile_api_still_works(self):
-        self.assertEqual(self.client.get("/api/users/1/ability-profile/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/users/{self.demo_user_id}/ability-profile/").status_code, 200)
 
     def test_consent_api_still_works(self):
-        self.assertEqual(self.client.get("/api/users/1/consent/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/users/{self.demo_user_id}/consent/").status_code, 200)
 
     def test_task_analyze_still_works(self):
         response = self.client.post("/api/tasks/analyze/", {"task_id": "purchase_ticket"}, format="json")
@@ -378,7 +605,7 @@ class RegressionTests(TestCase):
         completely unaffected by the new standalone mode."""
 
         start = self.client.post(
-            "/api/interactions/start/", {"user_id": 1, "task_id": "purchase_ticket"}, format="json"
+            "/api/interactions/start/", {"user_id": self.demo_user_id, "task_id": "purchase_ticket"}, format="json"
         )
         session_id = start.data["session_id"]
         self.client.post("/api/environment/analyze/", {"session_id": session_id}, format="json")

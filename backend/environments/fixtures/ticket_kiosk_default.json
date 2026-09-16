@@ -60,6 +60,16 @@
       "height": 40,
       "label": "Single",
       "type": "button"
+    },
+    {
+      "id": "voice_destination",
+      "x": 100,
+      "y": 120,
+      "width": 140,
+      "height": 40,
+      "label": "Speak your destination",
+      "type": "voice_prompt",
+      "interaction_type": "voice"
     }
   ],
   "contrast": {
@@ -70,6 +80,11 @@
   "noise_level": "moderate",
   "lighting": "normal",
   "visible_choice_count": 9,
+  "interaction_zone": { "x": 20, "y": 20, "width": 300, "height": 300 },
+  "interaction_step_count": 4,
+  "confirmation_timeout_seconds": 5,
+  "min_control_spacing_px": 0,
+  "confirmation_available": false,
   "alerts": [
     {
       "id": "confirm_payment_alert",

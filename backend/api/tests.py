@@ -41,6 +41,12 @@ class InteractionWorkflowTests(TestCase):
         self.low_vision_dexterity_user = User.objects.get(username="demo_low_vision_dexterity")
         self.cognitive_user = User.objects.get(username="demo_cognitive_load")
         self.hearing_user = User.objects.get(username="demo_hearing_difficulty")
+        self.limited_mobility_reach_user = User.objects.get(username="demo_limited_mobility_reach")
+        self.speech_difficulty_user = User.objects.get(username="demo_speech_difficulty")
+        self.fatigue_reduced_stamina_user = User.objects.get(username="demo_fatigue_reduced_stamina")
+        self.slower_reaction_speed_user = User.objects.get(username="demo_slower_reaction_speed")
+        self.visual_hearing_support_user = User.objects.get(username="demo_visual_hearing_support")
+        self.high_interaction_sensitivity_user = User.objects.get(username="demo_high_interaction_sensitivity")
 
     def _run_pipeline(self, user_id, baseline_mode=False):
         start = self.client.post(
@@ -91,6 +97,117 @@ class InteractionWorkflowTests(TestCase):
         barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
         self.assertIn("audio_only_alert", barrier_types)
         self.assertIn("caption_audio", apply["applied_adaptations"])
+
+    def test_limited_mobility_reach_profile_gets_reachable_control_layout(self):
+        session_id, barriers, recommend, apply = self._run_pipeline(self.limited_mobility_reach_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertIn("controls_out_of_reach", barrier_types)
+        self.assertIn("reachable_control_layout", apply["applied_adaptations"])
+        self.assertIn("reachable_layout", apply["ui_effects"])
+
+    def test_speech_difficulty_profile_gets_touch_text_alternative(self):
+        session_id, barriers, recommend, apply = self._run_pipeline(self.speech_difficulty_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertIn("voice_only_input", barrier_types)
+        self.assertIn("touch_text_alternative", apply["applied_adaptations"])
+        self.assertIn("touch_text_mode", apply["ui_effects"])
+
+    def test_typical_profile_does_not_get_voice_only_input_barrier(self):
+        """Negative case (section 21): the environment always offers the
+        voice_destination control regardless of who's using the kiosk — a
+        profile whose speech is typical must never see the barrier."""
+        session_id, barriers, recommend, apply = self._run_pipeline(self.low_vision_dexterity_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertNotIn("voice_only_input", barrier_types)
+        self.assertNotIn("touch_text_alternative", apply["applied_adaptations"])
+
+    def test_fatigue_reduced_stamina_profile_gets_streamline_task_flow(self):
+        session_id, barriers, recommend, apply = self._run_pipeline(self.fatigue_reduced_stamina_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertIn("excessive_interaction_burden", barrier_types)
+        self.assertIn("streamline_task_flow", apply["applied_adaptations"])
+        self.assertEqual(apply["ui_effects"]["flow"], "streamlined")
+
+    def test_fresh_fatigue_profile_does_not_get_excessive_interaction_burden_barrier(self):
+        """Negative case (section 21): the environment's flow length is the
+        same for everyone — a profile whose fatigue/stamina is fresh/typical
+        must never see the barrier or the streamlined-flow adaptation."""
+        session_id, barriers, recommend, apply = self._run_pipeline(self.low_vision_dexterity_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertNotIn("excessive_interaction_burden", barrier_types)
+        self.assertNotIn("streamline_task_flow", apply["applied_adaptations"])
+
+    def test_slower_reaction_speed_profile_gets_increase_interaction_timeout(self):
+        session_id, barriers, recommend, apply = self._run_pipeline(self.slower_reaction_speed_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertIn("time_limited_interaction", barrier_types)
+        self.assertIn("increase_interaction_timeout", apply["applied_adaptations"])
+        self.assertEqual(apply["ui_effects"]["extended_timeout_seconds"], 20)
+
+    def test_typical_reaction_speed_profile_does_not_get_time_limited_interaction_barrier(self):
+        """Negative case (section 26, CASE 1): the environment's confirmation
+        window is the same for everyone — a profile whose reaction speed is
+        typical must never see the barrier or the timeout-extension
+        adaptation."""
+        session_id, barriers, recommend, apply = self._run_pipeline(self.low_vision_dexterity_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertNotIn("time_limited_interaction", barrier_types)
+        self.assertNotIn("increase_interaction_timeout", apply["applied_adaptations"])
+
+    def test_visual_hearing_support_profile_gets_both_barriers_and_adaptations(self):
+        """TEST 1 + TEST 2 (Phase 5 section 17): both a real audio-only
+        mismatch and a real low-contrast mismatch exist in kiosk_standard,
+        and this profile has both a hearing and a vision requirement -- both
+        barriers, and both existing adaptations, should be produced by the
+        unmodified detection/scoring/safety pipeline. No new barrier type or
+        adaptation was needed for this profile."""
+        session_id, barriers, recommend, apply = self._run_pipeline(self.visual_hearing_support_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertIn("audio_only_alert", barrier_types)
+        self.assertIn("low_contrast", barrier_types)
+
+        applied_names = set(apply["applied_adaptations"])
+        self.assertIn("caption_audio", applied_names)
+        self.assertIn("increase_contrast", applied_names)
+        self.assertIn("banner_alert", apply["ui_effects"])
+        self.assertIn("contrast", apply["ui_effects"])
+
+    def test_typical_vision_and_hearing_profile_does_not_get_visual_hearing_barriers(self):
+        """TEST 5 (Phase 5 section 17): a profile with typical vision AND
+        typical hearing must never see either barrier on the same,
+        unmodified kiosk_standard environment -- a genuine mismatch check,
+        not `if profile == visual_hearing_support`."""
+        session_id, barriers, recommend, apply = self._run_pipeline(self.speech_difficulty_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertNotIn("audio_only_alert", barrier_types)
+        self.assertNotIn("low_contrast", barrier_types)
+
+    def test_high_interaction_sensitivity_profile_gets_increase_spacing(self):
+        session_id, barriers, recommend, apply = self._run_pipeline(self.high_interaction_sensitivity_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertIn("accidental_activation_risk", barrier_types)
+        self.assertIn("increase_spacing", apply["applied_adaptations"])
+        self.assertEqual(apply["ui_effects"]["spacing_scale"], 1.6)
+
+    def test_typical_interaction_sensitivity_profile_does_not_get_activation_risk_barrier(self):
+        """TEST 4 (Phase 6 section 20): a profile that never set
+        interaction_sensitivity (defaults to typical) must never see this
+        barrier on the same, unmodified kiosk_standard environment."""
+        session_id, barriers, recommend, apply = self._run_pipeline(self.low_vision_dexterity_user.id)
+
+        barrier_types = {b["barrier_type"] for b in barriers["barriers"]}
+        self.assertNotIn("accidental_activation_risk", barrier_types)
+        self.assertNotIn("increase_spacing", apply["applied_adaptations"])
 
     def test_different_profiles_yield_different_adaptations_same_engine(self):
         _, _, _, apply_a = self._run_pipeline(self.low_vision_dexterity_user.id)

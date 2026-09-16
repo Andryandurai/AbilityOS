@@ -38,6 +38,7 @@ def session_interaction_counts(session: InteractionSession) -> dict:
         "retries_count": events.filter(event_type__in=InteractionEvent.RETRY_EVENT_TYPES).count(),
         "backtracks_count": events.filter(event_type__in=InteractionEvent.BACKTRACK_EVENT_TYPES).count(),
         "assistance_count": events.filter(event_type=InteractionEvent.ASSISTANCE_REQUESTED).count(),
+        "timeouts_count": events.filter(event_type__in=InteractionEvent.TIMEOUT_EVENT_TYPES).count(),
     }
 
 

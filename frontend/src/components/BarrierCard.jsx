@@ -6,6 +6,11 @@ const DIMENSION_LABELS = {
   vision: "Vision",
   cognition: "Cognition",
   hearing: "Hearing",
+  reach: "Reach",
+  speech: "Speech",
+  fatigue: "Fatigue / Stamina",
+  reaction_speed: "Reaction Speed",
+  interaction_sensitivity: "Interaction Sensitivity",
 };
 
 function evidenceLines(barrier) {
@@ -34,6 +39,43 @@ function evidenceLines(barrier) {
     return {
       environment: (evidence.alerts || []).map((a) => `${a.id}: audio-only, critical`).join(", "),
       rule: "No visual alternative present for a critical audio alert",
+    };
+  }
+  if (type === "controls_out_of_reach") {
+    const zone = evidence.interaction_zone || {};
+    return {
+      environment: (evidence.controls || []).map((c) => `${c.id}: (${c.x}, ${c.y})`).join(", "),
+      rule: `Configured comfortable interaction zone = x:${zone.x}-${zone.x + zone.width}, y:${zone.y}-${zone.y + zone.height}`,
+    };
+  }
+  if (type === "voice_only_input") {
+    return {
+      environment: (evidence.controls || []).map((c) => `${c.id}: ${c.label} (voice)`).join(", "),
+      rule: "Non-speech (touch/text) interaction preferred for this speech profile",
+    };
+  }
+  if (type === "excessive_interaction_burden") {
+    const repeated = evidence.repeated_action_controls || [];
+    return {
+      environment:
+        `${evidence.step_count} interaction steps` +
+        (repeated.length ? ` (includes repeated taps: ${repeated.map((c) => c.label || c.id).join(", ")})` : ""),
+      rule: `Comfortable interaction-step limit = ${evidence.threshold}`,
+    };
+  }
+  if (type === "time_limited_interaction") {
+    return {
+      environment: `Confirmation window = ${evidence.actual_timeout_seconds} seconds`,
+      rule: `Configured response-time requirement = ${evidence.required_seconds} seconds`,
+    };
+  }
+  if (type === "accidental_activation_risk") {
+    const parts = [];
+    if (evidence.min_control_spacing_px != null) parts.push(`Adjacent control spacing = ${evidence.min_control_spacing_px}px`);
+    parts.push(evidence.confirmation_available ? "Confirmation step present" : "No confirmation step before the consequential action");
+    return {
+      environment: parts.join(" · "),
+      rule: `Comfortable minimum spacing = ${evidence.safe_separation_px}px`,
     };
   }
   return { environment: JSON.stringify(evidence), rule: "" };

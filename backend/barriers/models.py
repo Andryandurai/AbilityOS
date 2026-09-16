@@ -14,6 +14,11 @@ class Barrier(models.Model):
     TYPE_TOO_MANY_CHOICES = "too_many_choices"
     TYPE_AUDIO_ONLY_ALERT = "audio_only_alert"
     TYPE_FATIGUE_DEGRADED_PRECISION = "fatigue_degraded_precision"
+    TYPE_CONTROLS_OUT_OF_REACH = "controls_out_of_reach"
+    TYPE_VOICE_ONLY_INPUT = "voice_only_input"
+    TYPE_EXCESSIVE_INTERACTION_BURDEN = "excessive_interaction_burden"
+    TYPE_TIME_LIMITED_INTERACTION = "time_limited_interaction"
+    TYPE_ACCIDENTAL_ACTIVATION_RISK = "accidental_activation_risk"
 
     TYPE_CHOICES = [
         (TYPE_SMALL_TAP_TARGETS, "Small tap targets"),
@@ -21,6 +26,11 @@ class Barrier(models.Model):
         (TYPE_TOO_MANY_CHOICES, "Too many simultaneous choices"),
         (TYPE_AUDIO_ONLY_ALERT, "Audio-only alert"),
         (TYPE_FATIGUE_DEGRADED_PRECISION, "Fatigue-degraded precision"),
+        (TYPE_CONTROLS_OUT_OF_REACH, "Controls outside comfortable reach"),
+        (TYPE_VOICE_ONLY_INPUT, "Voice-only / speech-dependent interaction"),
+        (TYPE_EXCESSIVE_INTERACTION_BURDEN, "Excessive interaction burden"),
+        (TYPE_TIME_LIMITED_INTERACTION, "Time-limited interaction"),
+        (TYPE_ACCIDENTAL_ACTIVATION_RISK, "Accidental activation risk"),
     ]
 
     session = models.ForeignKey(

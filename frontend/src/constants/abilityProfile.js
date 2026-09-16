@@ -110,6 +110,15 @@ export const ABILITY_QUESTIONS = [
       { value: "needs-extended-time", label: "I need extra time" },
     ],
   },
+  {
+    key: "interaction_sensitivity",
+    heading: "Interaction Style",
+    question: "How do you prefer controls to behave?",
+    options: [
+      { value: "typical", label: "Typical interaction works for me" },
+      { value: "high", label: "I prefer stable, well-separated, deliberate interactions" },
+    ],
+  },
 ];
 
 export const MODALITY_QUESTION = {
@@ -143,11 +152,11 @@ const SUMMARY_COPY = {
     "single-tap-only": { emoji: "✋", text: "Single-tap interactions work best." },
   },
   reach: {
-    "limited-upper": { emoji: "🙌", text: "Controls within easy reach work best." },
-    seated: { emoji: "🙌", text: "You interact comfortably from a seated position." },
+    "limited-upper": { emoji: "🙌", text: "Reaching toward distant controls can be difficult." },
+    seated: { emoji: "🙌", text: "Seated interaction works best for you." },
   },
   mobility: {
-    limited: { emoji: "🚶", text: "Tasks that don't require moving around work best." },
+    limited: { emoji: "🚶", text: "Important controls should stay within a comfortable interaction area." },
     stationary: { emoji: "🚶", text: "You prefer to complete tasks from one spot." },
   },
   speech: {
@@ -165,6 +174,9 @@ const SUMMARY_COPY = {
   reaction_speed: {
     slower: { emoji: "⏱", text: "A little extra time helps." },
     "needs-extended-time": { emoji: "⏱", text: "Extended time before actions time out helps." },
+  },
+  interaction_sensitivity: {
+    high: { emoji: "🎚", text: "Stable, clearly separated, deliberate interactions work best for you." },
   },
 };
 
