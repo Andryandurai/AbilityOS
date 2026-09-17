@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from abilities.models import AbilityProfile
+from abilities.models import AbilityProfile, UserProfileSelection
 
 
 class AbilityProfileSerializer(serializers.ModelSerializer):
@@ -29,3 +29,22 @@ class AbilityProfileSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+
+class UserProfileSelectionSerializer(serializers.ModelSerializer):
+    """Read-shape for GET .../profile-selections/."""
+
+    class Meta:
+        model = UserProfileSelection
+        fields = ["profile_key", "status", "created_at", "updated_at"]
+        read_only_fields = fields
+
+
+class UserProfileSelectionInputSerializer(serializers.Serializer):
+    """POST .../profile-selections/'s input contract. `profile_key` and
+    `status` are both validated against the model's own `choices` (not a
+    hand-rolled check), so an unknown profile key or an arbitrary status
+    string is rejected before it ever reaches the service layer."""
+
+    profile_key = serializers.ChoiceField(choices=UserProfileSelection._meta.get_field("profile_key").choices)
+    status = serializers.ChoiceField(choices=UserProfileSelection.STATUS_CHOICES)

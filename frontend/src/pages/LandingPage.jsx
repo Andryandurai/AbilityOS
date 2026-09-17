@@ -9,7 +9,7 @@ import "./LandingPage.css";
  * (React -> Django -> Database) actually works: the status line below the
  * button is a live result of GET /api/health/, not a decorative claim.
  */
-export default function LandingPage({ onExplore }) {
+export default function LandingPage({ onExplore, onLogin, onRegister, authenticatedUser, onLogout, onGoToDashboard }) {
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState(null);
 
@@ -39,6 +39,39 @@ export default function LandingPage({ onExplore }) {
         <button className="btn btn--primary landing__cta" onClick={onExplore} autoFocus>
           Explore AbilityOS
         </button>
+
+        {/* Phase 1 (Real User Authentication) section 19 — a second,
+            independent entry path alongside the existing anonymous demo
+            above. Neither path requires the other. */}
+        <div className="row" style={{ justifyContent: "center", marginTop: "12px" }}>
+          {authenticatedUser ? (
+            <>
+              <span>
+                Welcome, <strong>{authenticatedUser.display_name || authenticatedUser.username}</strong>
+              </span>
+              {/* Phase 2 section 24 / Phase 4 section 12: the authenticated
+                  counterpart to "Explore AbilityOS" above -- opens this
+                  account's personalized Dashboard instead of picking a demo
+                  persona. First-time setup (Consent -> Questionnaire ->
+                  Profile Summary) is reached from there. */}
+              <button type="button" className="btn btn--primary" onClick={onGoToDashboard}>
+                Go to my Dashboard
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={onLogout}>
+                Log out
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn btn--ghost" onClick={onLogin}>
+                Log in
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={onRegister}>
+                Create an account
+              </button>
+            </>
+          )}
+        </div>
 
         <div className="landing__status" role="status" aria-live="polite">
           {health && (

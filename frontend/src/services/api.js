@@ -16,11 +16,25 @@ class ApiError extends Error {
   }
 }
 
+// Phase 1 (Real User Authentication): a module-level holder for the current
+// access token, set by useAuth.js on login/logout/refresh-on-load. Kept
+// here (not re-read from storage on every call) so this file has exactly
+// one place that knows how a request becomes "authenticated" -- callers
+// never attach headers themselves. See useAuth.js for the storage
+// strategy and its documented tradeoffs.
+let accessToken = null;
+export function setAccessToken(token) {
+  accessToken = token || null;
+}
+
 async function request(path, options = {}) {
   let response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       ...options,
     });
   } catch {
@@ -45,6 +59,53 @@ const get = (path) => request(path, { method: "GET" });
 const post = (path, body) => request(path, { method: "POST", body: JSON.stringify(body || {}) });
 const patch = (path, body) => request(path, { method: "PATCH", body: JSON.stringify(body || {}) });
 const del = (path) => request(path, { method: "DELETE" });
+
+// --- Phase 1: authentication ---------------------------------------------------
+// One function per endpoint, same flat pattern as every call below --
+// existing anonymous calls (listDemoUsers, getAbilityProfile, the whole
+// orchestrated workflow) are completely unchanged and continue to work
+// with no token attached at all.
+export const register = (payload) => post("/auth/register/", payload);
+export const login = (username, password) => post("/auth/login/", { username, password });
+export const logout = (refresh) => post("/auth/logout/", { refresh });
+export const getCurrentUser = () => get("/auth/me/");
+
+// --- Phase 2: questionnaire ---------------------------------------------------
+// Front door onto the existing Ability Profile (see docs/QUESTIONNAIRE.md) --
+// none of these compute a barrier/adaptation/score; they only ever produce
+// the same `dimensions` shape getAbilityProfile()/patchAbilityProfile()
+// already use.
+export const getQuestionnaire = () => get("/questionnaire/");
+export const startQuestionnaire = () => post("/questionnaire/start/", {});
+export const saveQuestionnaireResponse = (sessionId, questionId, selectedValue) =>
+  post(`/questionnaire/${sessionId}/response/`, { question_id: questionId, selected_value: selectedValue });
+export const completeQuestionnaire = (sessionId) => post(`/questionnaire/${sessionId}/complete/`, {});
+export const confirmQuestionnaire = (sessionId) => post(`/questionnaire/${sessionId}/confirm/`, {});
+
+// --- Phase 3: profile suggestions & selection ---------------------------------
+// Never computes a barrier/adaptation/score, and never itself changes
+// AbilityProfile.dimensions -- see docs/PROFILE_SUGGESTIONS.md.
+export const getProfileSuggestions = (userId) => get(`/users/${userId}/profile-suggestions/`);
+export const getProfileSelections = (userId) => get(`/users/${userId}/profile-selections/`);
+export const upsertProfileSelection = (userId, profileKey, statusValue) =>
+  post(`/users/${userId}/profile-selections/`, { profile_key: profileKey, status: statusValue });
+export const deleteProfileSelection = (userId, profileKey) =>
+  del(`/users/${userId}/profile-selections/${profileKey}/`);
+
+// --- Phase 6: Feedback + History + Analytics integration -----------------------
+// The authenticated user's own interaction history -- see docs/HISTORY_ANALYTICS.md
+// for why this is a separate endpoint from getRecentSessions() below rather than
+// an authenticated-mode branch of it. Session *detail* reuses the existing
+// getSessionSummary() (GET /api/interactions/{id}/summary/, Part 11) unchanged.
+export const getUserSessions = (userId) => get(`/users/${userId}/sessions/`);
+
+// --- Phase 7: Advanced Adaptive Intelligence & What-If Simulation --------------
+// Side-effect free -- never writes AbilityProfile, never creates a session.
+// The real profile is always loaded server-side from the authenticated
+// request; nothing here ever sends a userId or a replacement profile. See
+// docs/PHASE_7.md.
+export const runWhatIfSimulation = ({ taskId, environmentId, overrides }) =>
+  post("/what-if/simulate/", { task_id: taskId, environment_id: environmentId, overrides });
 
 // --- Foundation ----------------------------------------------------------------
 export const getHealth = () => get("/health/");

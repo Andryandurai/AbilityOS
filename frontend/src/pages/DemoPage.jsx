@@ -137,7 +137,12 @@ export default function DemoPage({ userId, resetSignal }) {
       <div className="demo-page__grid">
         <div className="stack">
           <div className="card">
-            <h1>Run the task — {profile.label}</h1>
+            {/* Phase 5 section 24: AbilityProfile.label is only ever set by
+                the demo personas (docs/DASHBOARD.md's known limitations) --
+                a real account's profile never has one, so this falls back
+                to a generic, still-accurate phrase rather than rendering
+                a trailing blank. */}
+            <h1>Run the task — {profile.label || "your Ability Profile"}</h1>
             <label className="row" style={{ marginBottom: "var(--space-3)" }}>
               <input
                 type="checkbox"

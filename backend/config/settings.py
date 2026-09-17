@@ -7,6 +7,7 @@ See docs/ARCHITECTURE.md for the system design this configuration supports.
 
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -55,6 +56,7 @@ INSTALLED_APPS = [
     # third-party
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     # AbilityOS apps
     "users",
@@ -67,6 +69,10 @@ INSTALLED_APPS = [
     "feedback",
     "analytics",
     "api",
+    # Phase 2 (Onboarding, Consent & Questionnaire): a front door onto the
+    # existing AbilityProfile, not a second profile system -- see
+    # docs/QUESTIONNAIRE.md.
+    "questionnaire",
 ]
 
 MIDDLEWARE = [
@@ -157,10 +163,60 @@ REST_FRAMEWORK = {
     # other endpoint is unaffected by adding this globally.
     "DEFAULT_THROTTLE_CLASSES": ("rest_framework.throttling.ScopedRateThrottle",),
     "DEFAULT_THROTTLE_RATES": (
-        {"auth_login": "10000/min", "session_start": "10000/min", "adaptation_recommend": "10000/min"}
+        {
+            "auth_login": "10000/min",
+            "auth_register": "10000/min",
+            "session_start": "10000/min",
+            "adaptation_recommend": "10000/min",
+        }
         if TESTING
-        else {"auth_login": "10/min", "session_start": "30/min", "adaptation_recommend": "30/min"}
+        else {
+            "auth_login": "10/min",
+            # Phase 1 (Real User Authentication): same scoped-throttle
+            # pattern as auth_login -- registration is exactly as worth
+            # protecting from abuse as login is.
+            "auth_register": "10/min",
+            "session_start": "30/min",
+            "adaptation_recommend": "30/min",
+        }
     ),
+}
+
+# ---------------------------------------------------------------------------
+# Phase 1 (Real User Authentication): explicit SimpleJWT configuration.
+#
+# Previously absent -- the library's own defaults (5 min access / 1 day
+# refresh, no rotation, no blacklist) were silently in effect. Made explicit
+# here, with values chosen for a hackathon demo (a judge or a person running
+# through onboarding should not be logged out mid-session) rather than a
+# generic production-security template:
+#
+# - ACCESS_TOKEN_LIFETIME: 1 day. Long enough that a full demo/judging
+#   session never silently expires mid-flow -- Phase 1 deliberately does not
+#   implement a silent-refresh-on-401 interceptor (see docs/AUTHENTICATION.md
+#   "Known limitations"), so a short-lived access token would just mean the
+#   user gets logged out while using the app, which is worse for this
+#   project's actual use case than the small extra exposure window.
+# - REFRESH_TOKEN_LIFETIME: 7 days, so "stay logged in" across normal
+#   day-to-day demo/dev use without re-entering credentials constantly.
+# - ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION: a refresh token is
+#   single-use and the old one is blacklisted the moment it's rotated --
+#   this only has an effect because token_blacklist is now installed
+#   (above); it also means POST /api/auth/logout/ has a real blacklist
+#   table to write the current refresh token into.
+# - AUTH_HEADER_TYPES: kept at the library default ("Bearer",) -- this is
+#   what frontend/src/services/api.js sends and is the conventional value,
+#   not something worth deviating from.
+# - UPDATE_LAST_LOGIN: True, since Django's User model already has a
+#   last_login field doing nothing today; cheap and meaningful once /me
+#   exists.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 CORS_ALLOWED_ORIGINS = [

@@ -1,0 +1,60 @@
+.dashboard {
+  max-width: 760px;
+}
+
+.dashboard__topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.dashboard__welcome {
+  margin-bottom: var(--space-1);
+}
+
+.dashboard__subtitle {
+  margin-bottom: 0;
+}
+
+.dashboard__topbar-actions {
+  flex-wrap: nowrap;
+}
+
+.dashboard .card {
+  margin-bottom: var(--space-5);
+}
+
+.dashboard .card:last-child {
+  margin-bottom: 0;
+}
+
+.dashboard__actions {
+  margin-top: var(--space-4);
+  justify-content: flex-start;
+}
+
+.dashboard__profiles-grid {
+  margin-top: var(--space-3);
+}
+
+.dashboard__profile-card p {
+  margin-bottom: 0;
+  color: var(--color-text-muted);
+}
+
+.dashboard__start-card {
+  text-align: center;
+  background: var(--color-surface-alt);
+}
+
+.dashboard__start-btn {
+  margin-top: var(--space-2);
+}
+
+.dashboard__start-actions {
+  justify-content: center;
+  margin-top: var(--space-2);
+}

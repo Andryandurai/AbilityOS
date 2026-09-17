@@ -210,6 +210,20 @@ export function summarizeProfileAsBullets(profile) {
   return summarizeProfile(profile).map((entry) => entry.text);
 }
 
+/**
+ * Phase 4 (Personalized Dashboard) section 12: whether any dimension has
+ * moved away from its baseline level -- i.e. whether the person has
+ * actually set up their profile yet. Deliberately ignores
+ * preferred_modality: unlike a dimension's baseline level, a fresh
+ * AbilityProfile's default modality ("visual") already has its own
+ * SUMMARY_COPY entry, so summarizeProfile() alone is never empty and can't
+ * be used to detect "never set up."
+ */
+export function hasCustomizedDimensions(profile) {
+  if (!profile) return false;
+  return Object.entries(profile.dimensions || {}).some(([key, dim]) => Boolean(SUMMARY_COPY[key]?.[dim.level]));
+}
+
 export function questionForKey(key) {
   return ABILITY_QUESTIONS.find((q) => q.key === key);
 }

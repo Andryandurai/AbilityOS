@@ -1,0 +1,73 @@
+.what-if {
+  max-width: 900px;
+}
+
+.what-if__controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.what-if__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.what-if__field span {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.what-if__field select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  min-height: 44px;
+}
+
+.what-if__current-value {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.what-if__run-btn {
+  margin-top: var(--space-2);
+}
+
+.what-if__error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin: var(--space-3) 0 0 0;
+}
+
+.what-if__comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.what-if__changes {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 1.05rem;
+}
+
+.what-if__safety-note {
+  background: var(--color-surface-alt);
+  text-align: center;
+}
+
+.what-if__safety-note p {
+  margin: 0;
+}

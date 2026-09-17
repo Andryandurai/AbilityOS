@@ -2,8 +2,9 @@ from django.conf import settings
 from django.db import models
 
 from abilities.constants import ALLOWED_SOURCES, DEFAULT_LEVEL, DIMENSION_KEYS, SOURCE_DEFAULT, SOURCE_MANUAL
+from abilities.profiles import PROFILE_KEY_CHOICES
 
-__all__ = ["AbilityProfile", "DIMENSION_KEYS", "default_dimensions"]
+__all__ = ["AbilityProfile", "DIMENSION_KEYS", "UserProfileSelection", "default_dimensions"]
 
 
 def default_dimensions():
@@ -87,3 +88,43 @@ class AbilityProfile(models.Model):
         dims = dict(self.dimensions)
         dims[key] = dim
         self.dimensions = dims
+
+
+class UserProfileSelection(models.Model):
+    """One user's stance on one canonical profile concept (Phase 3) --
+    never itself a source of reasoning. This table only records what the
+    person has accepted/rejected/manually added for their own reference
+    and for personalizing which parts of the app to surface; it is never
+    read by barrier detection, adaptation scoring, or any other part of
+    the AbilityOS reasoning core, which continues to operate purely on
+    AbilityProfile.dimensions. See docs/PROFILE_SUGGESTIONS.md.
+    """
+
+    STATUS_SUGGESTED = "suggested"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_REJECTED = "rejected"
+    STATUS_MANUALLY_ADDED = "manually_added"
+
+    STATUS_CHOICES = [
+        (STATUS_SUGGESTED, "Suggested"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_REJECTED, "Rejected"),
+        (STATUS_MANUALLY_ADDED, "Manually added"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile_selections"
+    )
+    profile_key = models.CharField(max_length=60, choices=PROFILE_KEY_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["profile_key"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "profile_key"], name="one_selection_per_profile_per_user"),
+        ]
+
+    def __str__(self):
+        return f"UserProfileSelection<user={self.user_id} {self.profile_key}={self.status}>"
